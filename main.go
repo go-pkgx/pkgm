@@ -35,7 +35,7 @@ usage:
   pkgm update|up|upgrade                  update installations to latest
   pkgm pin          <pkg>@version ...     install pinned to an exact version
   pkgm run|x        <pkg> [-- args...]    run a pkg (shell-free; works FROM scratch)
-  pkgm image        <pkg>                 emit a FROM-scratch Dockerfile that
+  pkgm image        <pkg>                 emit a FROM-scratch Containerfile that
                                           installs <pkg> with pkgm, in the image
 
 flags:
