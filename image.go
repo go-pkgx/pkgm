@@ -8,9 +8,13 @@ import (
 	"strings"
 )
 
-// cmdImage writes, to stdout, a `FROM scratch` Dockerfile that installs the
+// cmdImage writes, to stdout, a `FROM scratch` Containerfile that installs the
 // package's whole runtime closure with pkgm ITSELF, from inside the image, and
 // runs it shell-free.
+//
+// The output is the vendor-neutral OCI "Containerfile" — identical syntax to a
+// Dockerfile; podman/buildah pick it up by name, and docker builds it with
+// `-f Containerfile`.
 //
 // pkgm is a static CGO_ENABLED=0 binary that already runs on `FROM scratch`, so
 // it bootstraps the entire userland from within the image: the `RUN` step pulls
@@ -20,13 +24,13 @@ import (
 // from-scratch install (and, in CI, the proof that the published bottles are
 // self-sufficient with no system libc).
 //
-// The subcommand only emits the Dockerfile: pkgm is a package manager, not a
-// docker driver. The build context must contain the target-arch `pkgm` binary
-// as `pkgm`. Build + smoke-test:
+// The subcommand only emits the Containerfile: pkgm is a package manager, not a
+// container-build driver. The build context must contain the target-arch `pkgm`
+// binary as `pkgm`. Build + smoke-test (docker; podman is `podman build .`):
 //
-//	pkgm image lz4.org > Dockerfile
+//	pkgm image lz4.org > Containerfile
 //	cp "$(command -v pkgm)" pkgm
-//	docker build -t scratch-lz4 .
+//	docker build -f Containerfile -t scratch-lz4 .
 //	docker run --rm scratch-lz4 --version
 func cmdImage(args []string) error {
 	return writeImage(os.Stdout, args)
