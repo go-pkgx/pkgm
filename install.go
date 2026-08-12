@@ -66,15 +66,23 @@ func cmdRun(args []string) error {
 			env = append(env, "PATH="+strings.Join(pathDirs, ":")+":"+os.Getenv("PATH"))
 		}
 	}
-	// On linux, make the pkgx loader available at /lib/ld-linux and (for wrapper
-	// scripts) bash at /bin/sh (best-effort). Then exec the bin natively so BOTH
-	// the bin and any child processes / wrapper scripts it spawns resolve. If the
-	// loader could not be placed (read-only rootfs) and the bin is an ELF, fall
-	// back to invoking the loader explicitly.
+	// On linux, best-effort place the pkgx loader at /lib/ld-linux and (for
+	// wrapper scripts) bash at /bin/sh, so child processes and #!/bin/sh wrappers
+	// resolve too (works when we are root on a writable rootfs, e.g. a scratch
+	// image). Then, for an ELF, ALWAYS launch through the pkgx loader explicitly.
+	//
+	// The loader (ld-linux) and libc.so.6 are a matched pair, so we must NOT rely
+	// on the host's canonical /lib64/ld-linux: on an unprivileged host we cannot
+	// replace it, and an OLDER host loader cannot load a NEWER pkgx libc. Proven
+	// on AlmaLinux 8 (host glibc 2.28): a direct exec of a pkgx tool fails with
+	// "/lib64/ld-linux-x86-64.so.2: version `GLIBC_2.35' not found (required by
+	// pkgx libc 2.44)", whereas the explicit pkgx loader runs it fine. This is
+	// what lets pkgx bottles run on ANY host — no root, no from-scratch image,
+	// bringing their own glibc (key for old/heterogeneous HPC login nodes).
 	if bottle.GOOS() == "linux" {
 		if loader := bottle.FindLoader(dir); loader != "" {
 			bottle.SetupScratchRootfs(loader, shellPath)
-			if !bottle.CanonicalLoaderExists() && bottle.IsELF(binPath) {
+			if bottle.IsELF(binPath) {
 				argv := append([]string{loader, "--library-path", libPath, binPath}, rest...)
 				return bottle.Exec(loader, argv, env)
 			}
