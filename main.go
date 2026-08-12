@@ -35,6 +35,8 @@ usage:
   pkgm update|up|upgrade                  update installations to latest
   pkgm pin          <pkg>@version ...     install pinned to an exact version
   pkgm run|x        <pkg> [-- args...]    run a pkg (shell-free; works FROM scratch)
+  pkgm image        <pkg>                 emit a FROM-scratch Dockerfile that
+                                          installs <pkg> with pkgm, in the image
 
 flags:
   -h, --help        show this help
@@ -154,6 +156,8 @@ func dispatch(cmd string, args []string, f flags) error {
 		return cmdInstall(args, resolvePrefix(f, false), f)
 	case "run", "x":
 		return cmdRun(args)
+	case "image":
+		return cmdImage(args)
 	default:
 		return fmt.Errorf("unknown command %q (try --help)", cmd)
 	}
