@@ -8,7 +8,7 @@ import (
 
 func TestWriteImage(t *testing.T) {
 	var b strings.Builder
-	if err := writeImage(&b, []string{"lz4.org"}, ""); err != nil {
+	if err := writeImage(&b, []string{"lz4.org"}, "", ""); err != nil {
 		t.Fatalf("writeImage: %v", err)
 	}
 	got := b.String()
@@ -34,7 +34,7 @@ func TestWriteImage(t *testing.T) {
 func TestWriteImageOverlay(t *testing.T) {
 	var b strings.Builder
 	url := "https://raw.githubusercontent.com/go-pkgx/pantry-overlay/main/projects"
-	if err := writeImage(&b, []string{"curl.se"}, url); err != nil {
+	if err := writeImage(&b, []string{"curl.se"}, url, ""); err != nil {
 		t.Fatalf("writeImage: %v", err)
 	}
 	got := b.String()
@@ -46,10 +46,25 @@ func TestWriteImageOverlay(t *testing.T) {
 	}
 }
 
+// -glibc pins gnu.org/glibc as an extra explicit install root (=<ver>), and a
+// leading "=" the caller may pass is not doubled.
+func TestWriteImageGlibcPin(t *testing.T) {
+	for _, in := range []string{"2.28", "=2.28"} {
+		var b strings.Builder
+		if err := writeImage(&b, []string{"lz4.org"}, "", in); err != nil {
+			t.Fatalf("writeImage glibc=%q: %v", in, err)
+		}
+		want := `RUN ["/pkgm","install","-s","lz4.org","gnu.org/glibc@=2.28"]` + "\n"
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("glibc=%q: missing %q\n%s", in, want, b.String())
+		}
+	}
+}
+
 // A project name with a JSON metacharacter must be escaped, not injected.
 func TestWriteImageEscapesProject(t *testing.T) {
 	var b strings.Builder
-	if err := writeImage(&b, []string{`x"y`}, ""); err != nil {
+	if err := writeImage(&b, []string{`x"y`}, "", ""); err != nil {
 		t.Fatalf("writeImage: %v", err)
 	}
 	if !strings.Contains(b.String(), `"x\"y"`) {
@@ -59,7 +74,7 @@ func TestWriteImageEscapesProject(t *testing.T) {
 
 func TestWriteImageNoArgs(t *testing.T) {
 	var b strings.Builder
-	if err := writeImage(&b, nil, ""); err == nil {
+	if err := writeImage(&b, nil, "", ""); err == nil {
 		t.Error("writeImage(nil) should error")
 	}
 	if b.Len() != 0 {
@@ -73,7 +88,7 @@ type failWriter struct{}
 func (failWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
 
 func TestWriteImageWriteError(t *testing.T) {
-	if err := writeImage(failWriter{}, []string{"lz4.org"}, ""); err == nil {
+	if err := writeImage(failWriter{}, []string{"lz4.org"}, "", ""); err == nil {
 		t.Error("writeImage should propagate a write error")
 	}
 }

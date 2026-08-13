@@ -37,20 +37,29 @@ func cmdImage(args []string) error {
 	fs := flag.NewFlagSet("image", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	overlay := fs.String("overlay", "", "bake PKGX_PANTRY_OVERLAY=<url> into the image (corrected recipes consulted before the upstream pantry)")
+	glibc := fs.String("glibc", "", "pin glibc to an exact version in the image, e.g. -glibc 2.28 (default: newest)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	return writeImage(os.Stdout, fs.Args(), *overlay)
+	return writeImage(os.Stdout, fs.Args(), *overlay, *glibc)
 }
 
 // writeImage is the testable core of cmdImage (stdout injected).
-func writeImage(w io.Writer, args []string, overlay string) error {
+func writeImage(w io.Writer, args []string, overlay, glibc string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("image: need a package")
 	}
 	project := args[0]
+	// The RUN installs the package's from-scratch closure. Pinning glibc is just
+	// an extra explicit root: CompleteClosure adds the implicit glibc only when
+	// none is already in the closure, so a pinned gnu.org/glibc@=<ver> wins and
+	// the image ships exactly that glibc (deterministic for a known HPC kernel).
+	run := []string{"/pkgm", "install", "-s", project}
+	if glibc != "" {
+		run = append(run, "gnu.org/glibc@="+strings.TrimPrefix(glibc, "="))
+	}
 	// exec-form (JSON) RUN/ENTRYPOINT need no shell — essential on scratch,
-	// where there is no /bin/sh. json.Marshal escapes the project safely.
+	// where there is no /bin/sh. json.Marshal escapes the args safely.
 	var b strings.Builder
 	fmt.Fprintln(&b, "FROM scratch")
 	fmt.Fprintln(&b, "ENV PKGX_DIR=/pkgx")
@@ -59,7 +68,7 @@ func writeImage(w io.Writer, args []string, overlay string) error {
 		fmt.Fprintln(&b, "ENV PKGX_PANTRY_OVERLAY="+overlay)
 	}
 	fmt.Fprintln(&b, "COPY pkgm /pkgm")
-	fmt.Fprintln(&b, "RUN "+execForm("/pkgm", "install", "-s", project))
+	fmt.Fprintln(&b, "RUN "+execForm(run...))
 	fmt.Fprintln(&b, "ENTRYPOINT "+execForm("/pkgm", "run", project, "--"))
 	_, err := io.WriteString(w, b.String())
 	return err
