@@ -37,7 +37,7 @@ func cmdImage(args []string) error {
 	fs := flag.NewFlagSet("image", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	overlay := fs.String("overlay", "", "bake PKGX_PANTRY_OVERLAY=<url> into the image (corrected recipes consulted before the upstream pantry)")
-	glibc := fs.String("glibc", "", "pin glibc to an exact version in the image, e.g. -glibc 2.28 (default: newest)")
+	glibc := fs.String("glibc", "", "bake PKGX_GLIBC=<version> — the image installs and runs against exactly that glibc, e.g. -glibc 2.28 (default: whatever the host kernel supports)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -50,14 +50,6 @@ func writeImage(w io.Writer, args []string, overlay, glibc string) error {
 		return fmt.Errorf("image: need a package")
 	}
 	project := args[0]
-	// The RUN installs the package's from-scratch closure. Pinning glibc is just
-	// an extra explicit root: CompleteClosure adds the implicit glibc only when
-	// none is already in the closure, so a pinned gnu.org/glibc@=<ver> wins and
-	// the image ships exactly that glibc (deterministic for a known HPC kernel).
-	run := []string{"/pkgm", "install", "-s", project}
-	if glibc != "" {
-		run = append(run, "gnu.org/glibc@="+strings.TrimPrefix(glibc, "="))
-	}
 	// exec-form (JSON) RUN/ENTRYPOINT need no shell — essential on scratch,
 	// where there is no /bin/sh. json.Marshal escapes the args safely.
 	var b strings.Builder
@@ -67,8 +59,16 @@ func writeImage(w io.Writer, args []string, overlay, glibc string) error {
 	if overlay != "" {
 		fmt.Fprintln(&b, "ENV PKGX_PANTRY_OVERLAY="+overlay)
 	}
+	// A pinned glibc is baked as the environment variable bottle resolves the
+	// implicit C library with, so it holds for BOTH the RUN that installs the
+	// closure and every later `pkgm run` inside the image — one glibc, chosen
+	// once, deterministic for a known cluster kernel. (Passing an extra
+	// gnu.org/glibc@=<ver> install root would only pin the install.)
+	if glibc != "" {
+		fmt.Fprintln(&b, "ENV PKGX_GLIBC="+strings.TrimPrefix(glibc, "="))
+	}
 	fmt.Fprintln(&b, "COPY pkgm /pkgm")
-	fmt.Fprintln(&b, "RUN "+execForm(run...))
+	fmt.Fprintln(&b, "RUN "+execForm("/pkgm", "install", "-s", project))
 	fmt.Fprintln(&b, "ENTRYPOINT "+execForm("/pkgm", "run", project, "--"))
 	_, err := io.WriteString(w, b.String())
 	return err

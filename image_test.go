@@ -46,18 +46,29 @@ func TestWriteImageOverlay(t *testing.T) {
 	}
 }
 
-// -glibc pins gnu.org/glibc as an extra explicit install root (=<ver>), and a
-// leading "=" the caller may pass is not doubled.
+// -glibc bakes the pin as PKGX_GLIBC, so it holds for the install RUN AND for
+// every later `pkgm run` in the image; a leading "=" is not doubled.
 func TestWriteImageGlibcPin(t *testing.T) {
 	for _, in := range []string{"2.28", "=2.28"} {
 		var b strings.Builder
 		if err := writeImage(&b, []string{"lz4.org"}, "", in); err != nil {
 			t.Fatalf("writeImage glibc=%q: %v", in, err)
 		}
-		want := `RUN ["/pkgm","install","-s","lz4.org","gnu.org/glibc@=2.28"]` + "\n"
-		if !strings.Contains(b.String(), want) {
-			t.Errorf("glibc=%q: missing %q\n%s", in, want, b.String())
+		got := b.String()
+		if !strings.Contains(got, "ENV PKGX_GLIBC=2.28\n") {
+			t.Errorf("glibc=%q: pin env missing:\n%s", in, got)
 		}
+		if strings.Index(got, "PKGX_GLIBC") > strings.Index(got, "COPY pkgm") {
+			t.Errorf("pin env must precede COPY (it governs the RUN):\n%s", got)
+		}
+	}
+	// unpinned: no stray env
+	var b strings.Builder
+	if err := writeImage(&b, []string{"lz4.org"}, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(b.String(), "PKGX_GLIBC") {
+		t.Errorf("unpinned image carries a glibc pin:\n%s", b.String())
 	}
 }
 

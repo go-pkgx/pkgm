@@ -6,8 +6,10 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/go-attest/sign v0.1.0 h1:HxDIf7vo1ZOgl+TdCyQQ9qXbwmJBu3LMOlkoIKMnZwc=
 github.com/go-attest/sign v0.1.0/go.mod h1:V+wp/HvvQgVRb+de8UKH4OqvaRJhY4A7MiXwK8FyBuQ=
-github.com/go-pkgx/bottle v0.5.3-0.20260813070232-65a97d98eb5a h1:YKtH2g4xtoKwzmGvdzwXeQip7is2fealH+fEZyQGFDQ=
-github.com/go-pkgx/bottle v0.5.3-0.20260813070232-65a97d98eb5a/go.mod h1:8ve+b+5J3CHhCeBNLM6bPulIUADQmN9wPNkdmcF39Yo=
+github.com/go-pkgx/bottle v0.5.3-0.20260813170018-1c4a56f80a82 h1:e+XdCOJeJ4YR3d28MD7juxvfDt83W+KsIrnZD9TNB5U=
+github.com/go-pkgx/bottle v0.5.3-0.20260813170018-1c4a56f80a82/go.mod h1:8ve+b+5J3CHhCeBNLM6bPulIUADQmN9wPNkdmcF39Yo=
+github.com/go-pkgx/bottle v0.5.3-0.20260813182645-2dea463a3f27 h1:MsVGFeNI15cay12yuhi9sID9xDUxravvlFe4ax1UHZs=
+github.com/go-pkgx/bottle v0.5.3-0.20260813182645-2dea463a3f27/go.mod h1:8ve+b+5J3CHhCeBNLM6bPulIUADQmN9wPNkdmcF39Yo=
 github.com/go-test/deep v1.0.3 h1:ZrJSEWsXzPOxaZnFteGEfooLba+ju3FYIbOrS+rQd68=
 github.com/go-test/deep v1.0.3/go.mod h1:wGDj63lr65AM2AQyKZd/NYHGb0R+1RLqB8NKt3aSFNA=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
