@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -33,11 +34,17 @@ import (
 //	docker build -f Containerfile -t scratch-lz4 .
 //	docker run --rm scratch-lz4 --version
 func cmdImage(args []string) error {
-	return writeImage(os.Stdout, args)
+	fs := flag.NewFlagSet("image", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	overlay := fs.String("overlay", "", "bake PKGX_PANTRY_OVERLAY=<url> into the image (corrected recipes consulted before the upstream pantry)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	return writeImage(os.Stdout, fs.Args(), *overlay)
 }
 
 // writeImage is the testable core of cmdImage (stdout injected).
-func writeImage(w io.Writer, args []string) error {
+func writeImage(w io.Writer, args []string, overlay string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("image: need a package")
 	}
@@ -48,6 +55,9 @@ func writeImage(w io.Writer, args []string) error {
 	fmt.Fprintln(&b, "FROM scratch")
 	fmt.Fprintln(&b, "ENV PKGX_DIR=/pkgx")
 	fmt.Fprintln(&b, "ENV HOME=/root")
+	if overlay != "" {
+		fmt.Fprintln(&b, "ENV PKGX_PANTRY_OVERLAY="+overlay)
+	}
 	fmt.Fprintln(&b, "COPY pkgm /pkgm")
 	fmt.Fprintln(&b, "RUN "+execForm("/pkgm", "install", "-s", project))
 	fmt.Fprintln(&b, "ENTRYPOINT "+execForm("/pkgm", "run", project, "--"))

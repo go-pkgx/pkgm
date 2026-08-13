@@ -8,7 +8,7 @@ import (
 
 func TestWriteImage(t *testing.T) {
 	var b strings.Builder
-	if err := writeImage(&b, []string{"lz4.org"}); err != nil {
+	if err := writeImage(&b, []string{"lz4.org"}, ""); err != nil {
 		t.Fatalf("writeImage: %v", err)
 	}
 	got := b.String()
@@ -21,16 +21,35 @@ func TestWriteImage(t *testing.T) {
 		`ENTRYPOINT ["/pkgm","run","lz4.org","--"]` + "\n",
 	} {
 		if !strings.Contains(got, want) {
-			t.Errorf("Dockerfile missing %q\n---\n%s", want, got)
+			t.Errorf("Containerfile missing %q\n---\n%s", want, got)
 		}
+	}
+	// without -overlay, no PKGX_PANTRY_OVERLAY line
+	if strings.Contains(got, "PKGX_PANTRY_OVERLAY") {
+		t.Errorf("unexpected overlay env:\n%s", got)
 	}
 }
 
-// A project name with a JSON metacharacter must be escaped, not injected, into
-// the exec-form arrays.
+// -overlay bakes an ENV PKGX_PANTRY_OVERLAY line before COPY.
+func TestWriteImageOverlay(t *testing.T) {
+	var b strings.Builder
+	url := "https://raw.githubusercontent.com/go-pkgx/pantry-overlay/main/projects"
+	if err := writeImage(&b, []string{"curl.se"}, url); err != nil {
+		t.Fatalf("writeImage: %v", err)
+	}
+	got := b.String()
+	if !strings.Contains(got, "ENV PKGX_PANTRY_OVERLAY="+url+"\n") {
+		t.Errorf("overlay env missing:\n%s", got)
+	}
+	if strings.Index(got, "PKGX_PANTRY_OVERLAY") > strings.Index(got, "COPY pkgm") {
+		t.Errorf("overlay env must precede COPY:\n%s", got)
+	}
+}
+
+// A project name with a JSON metacharacter must be escaped, not injected.
 func TestWriteImageEscapesProject(t *testing.T) {
 	var b strings.Builder
-	if err := writeImage(&b, []string{`x"y`}); err != nil {
+	if err := writeImage(&b, []string{`x"y`}, ""); err != nil {
 		t.Fatalf("writeImage: %v", err)
 	}
 	if !strings.Contains(b.String(), `"x\"y"`) {
@@ -40,11 +59,11 @@ func TestWriteImageEscapesProject(t *testing.T) {
 
 func TestWriteImageNoArgs(t *testing.T) {
 	var b strings.Builder
-	if err := writeImage(&b, nil); err == nil {
+	if err := writeImage(&b, nil, ""); err == nil {
 		t.Error("writeImage(nil) should error")
 	}
 	if b.Len() != 0 {
-		t.Errorf("no Dockerfile should be written on error, got %q", b.String())
+		t.Errorf("no Containerfile should be written on error, got %q", b.String())
 	}
 }
 
@@ -54,19 +73,24 @@ type failWriter struct{}
 func (failWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
 
 func TestWriteImageWriteError(t *testing.T) {
-	if err := writeImage(failWriter{}, []string{"lz4.org"}); err == nil {
+	if err := writeImage(failWriter{}, []string{"lz4.org"}, ""); err == nil {
 		t.Error("writeImage should propagate a write error")
 	}
 }
 
-// cmdImage is the stdout-wired wrapper; exercise both its success and error
-// paths (it delegates to writeImage on os.Stdout).
+// cmdImage is the flag-parsing + stdout-wired wrapper.
 func TestCmdImage(t *testing.T) {
 	if err := cmdImage([]string{"lz4.org"}); err != nil {
 		t.Errorf("cmdImage: %v", err)
 	}
+	if err := cmdImage([]string{"-overlay", "https://ov.example/projects", "curl.se"}); err != nil {
+		t.Errorf("cmdImage -overlay: %v", err)
+	}
 	if err := cmdImage(nil); err == nil {
 		t.Error("cmdImage(nil) should error")
+	}
+	if err := cmdImage([]string{"-nope"}); err == nil {
+		t.Error("cmdImage with an unknown flag should error")
 	}
 }
 
