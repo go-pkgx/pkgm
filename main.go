@@ -244,6 +244,20 @@ func cmdInstall(args []string, prefix string, f flags) error {
 			fmt.Printf("  %-9s %s v%s\n", state, r.Project, r.Version.Raw)
 		}
 	}
+	if f.scratch {
+		// Make the rootfs itself runnable, not just populated: pose the pkgx
+		// loader at the canonical PT_INTERP path and, when the closure carries a
+		// shell, /bin/sh. A FROM-scratch image has neither, and anything that
+		// shells out dies without them — `make` runs every recipe line through
+		// /bin/sh, so a build inside such an image fails on the first one with
+		// "make: /bin/sh: No such file or directory". `pkgm run` already does
+		// this at run time; an image built with -s needs it baked in.
+		if bottle.GOOS() == "linux" {
+			if loader := bottle.FindLoader(dir); loader != "" {
+				bottle.SetupScratchRootfs(loader, bottle.FindClosureBin(closure, dir, "gnu.org/bash", "bash"))
+			}
+		}
+	}
 	n, err := bottle.StubBins(closure, dir, prefix)
 	if err != nil {
 		return err
