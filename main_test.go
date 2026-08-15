@@ -297,3 +297,67 @@ func TestRunExec(t *testing.T) {
 		t.Errorf("trailing arg lost: %v", gotArgv)
 	}
 }
+
+// TestReadPackageLists: a long install belongs in a committed file, so the list
+// must survive comments, blank lines and inline annotations — the things that
+// make such a file worth reviewing.
+func TestReadPackageLists(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "toolchain.txt")
+	if err := os.WriteFile(a, []byte(`# the C toolchain
+llvm.org        # clang, lld, compiler-rt
+gnu.org/make
+
+  gnu.org/glibc@2.27.0   # the HPC floor
+
+# nothing below this line
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	b := filepath.Join(dir, "extra.txt")
+	if err := os.WriteFile(b, []byte("curl.se\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := readPackageLists([]string{a, b})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"llvm.org", "gnu.org/make", "gnu.org/glibc@2.27.0", "curl.se"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("specs = %v, want %v", got, want)
+	}
+
+	// an empty or comment-only file contributes nothing, and is not an error
+	c := filepath.Join(dir, "empty.txt")
+	if err := os.WriteFile(c, []byte("# nothing here\n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := readPackageLists([]string{c}); err != nil || len(got) != 0 {
+		t.Fatalf("empty list → %v, %v", got, err)
+	}
+	// no files at all
+	if got, err := readPackageLists(nil); err != nil || got != nil {
+		t.Fatalf("no files → %v, %v", got, err)
+	}
+	// a missing file is reported, not silently skipped: a committed list that
+	// does not exist is a mistake worth surfacing
+	if _, err := readPackageLists([]string{filepath.Join(dir, "absent.txt")}); err == nil {
+		t.Fatal("want an error for a missing package list")
+	}
+}
+
+// TestParseArgsFileFlag: -f/--file/--file= all collect, and repeat.
+func TestParseArgsFileFlag(t *testing.T) {
+	pos, f := parseArgs([]string{"install", "-f", "a.txt", "--file", "b.txt", "--file=c.txt", "extra.org"})
+	if strings.Join(f.files, ",") != "a.txt,b.txt,c.txt" {
+		t.Fatalf("files = %v", f.files)
+	}
+	if strings.Join(pos, ",") != "install,extra.org" {
+		t.Fatalf("positional = %v", pos)
+	}
+	// a dangling -f consumes nothing rather than eating the next command
+	if _, f := parseArgs([]string{"install", "-f"}); len(f.files) != 0 {
+		t.Fatalf("dangling -f → %v", f.files)
+	}
+}
