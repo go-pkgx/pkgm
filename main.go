@@ -20,6 +20,10 @@ import (
 	"github.com/go-pkgx/bottle"
 )
 
+// osReadFile is os.ReadFile, a seam so the package-list reader's error branch is
+// testable without contriving an unreadable file.
+var osReadFile = os.ReadFile
+
 // version is reported by `pkgm --version`. It defaults to "dev" and is
 // overridden at release-build time via -ldflags "-X main.version=<tag>".
 var version = "dev"
@@ -28,6 +32,7 @@ var usage = `pkgm ` + version + ` — pure-Go pkgx package manager
 
 usage:
   pkgm install|i    <pkg>[@version] ...   install to /usr/local (root) or ~/.local
+                    -f <file>             ... or read the list from a file
   pkgm uninstall|rm <pkg> ...             remove an installation
   pkgm shim|stub    <pkg> ...             create a shim in <prefix>/bin
   pkgm list|ls                            list what's installed
@@ -44,6 +49,10 @@ flags:
   -p, --pin         pin the requested version(s) exactly
   -P, --prefix DIR  install prefix (bins go to DIR/bin); overrides root detection
   -s, --from-scratch  also pull the implicit libc/gcc closure (FROM-scratch ready)
+  -f, --file FILE   read packages from FILE, one <pkg>[@version] per line
+                    (repeatable; blank lines ignored, # starts a comment). A long
+                    install belongs in a file you can commit next to what it
+                    builds, review and diff — not retyped on a command line.
 
 env:
   PKGX_DIR          bottle store (default: ~/.pkgx)
@@ -63,6 +72,7 @@ env:
 type flags struct {
 	help, showVersion, pin, scratch bool
 	prefix                          string
+	files                           []string // -f/--file: package lists to read
 }
 
 // parseArgs splits flags from positional arguments (getopt-style, matching the
@@ -97,6 +107,13 @@ func parseArgs(argv []string) ([]string, flags) {
 			}
 		case strings.HasPrefix(a, "--prefix="):
 			f.prefix = strings.TrimPrefix(a, "--prefix=")
+		case a == "-f" || a == "--file":
+			if i+1 < len(argv) {
+				i++
+				f.files = append(f.files, argv[i])
+			}
+		case strings.HasPrefix(a, "--file="):
+			f.files = append(f.files, strings.TrimPrefix(a, "--file="))
 		default:
 			pos = append(pos, a)
 		}
@@ -206,6 +223,11 @@ func parseReq(s string, pin bool) (project, constraint string) {
 }
 
 func cmdInstall(args []string, prefix string, f flags) error {
+	fromFiles, err := readPackageLists(f.files)
+	if err != nil {
+		return err
+	}
+	args = append(fromFiles, args...)
 	if len(args) == 0 {
 		return fmt.Errorf("no packages specified")
 	}
@@ -216,7 +238,6 @@ func cmdInstall(args []string, prefix string, f flags) error {
 	}
 	dir := bottle.Dir()
 	var closure []bottle.Resolved
-	var err error
 	if f.scratch {
 		// Materialize the complete FROM-scratch closure (declared deps + the
 		// implicit glibc/libgcc_s/libstdc++/libatomic system libraries).
@@ -397,4 +418,35 @@ func warnPath(prefix string) {
 		}
 	}
 	fmt.Fprintf(os.Stderr, "! warning: %s is not in $PATH\n", bin)
+}
+
+// readPackageLists reads package specs from each -f/--file, one per line.
+//
+// A long install belongs in a FILE that lives beside the thing it builds: the
+// list is then reviewable, diffable and committed with the rest of the project,
+// instead of being retyped on a command line (or buried in a Dockerfile) where
+// nothing records why a package is there. Blank lines are ignored and `#`
+// starts a comment — so each entry can say what it is for, which is half the
+// point of committing the list.
+//
+// Specs are exactly what the command line takes (project[@constraint]), and
+// files are read BEFORE the positional arguments, so an argument can still
+// override or extend a committed list.
+func readPackageLists(files []string) ([]string, error) {
+	var specs []string
+	for _, f := range files {
+		data, err := osReadFile(f)
+		if err != nil {
+			return nil, fmt.Errorf("package list: %w", err)
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if i := strings.IndexByte(line, '#'); i >= 0 {
+				line = line[:i]
+			}
+			if s := strings.TrimSpace(line); s != "" {
+				specs = append(specs, s)
+			}
+		}
+	}
+	return specs, nil
 }
