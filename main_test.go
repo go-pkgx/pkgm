@@ -64,6 +64,10 @@ func fakeServer(t *testing.T, pkgs map[string]fakePkg) func() {
 		}
 		http.NotFound(w, r)
 	})
+	// The fixture is a static-HTTP dist serving UNSIGNED bottles: the fail-closed
+	// check (which the install path now enforces too) would refuse every one of
+	// them, so this fixture states the posture it always assumed.
+	t.Setenv("PKGX_VERIFY", "0")
 	bottle.DistBase, bottle.PantryBase = srv.URL, srv.URL
 	return srv.Close
 }
