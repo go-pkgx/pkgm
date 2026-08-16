@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"testing"
+
+	"github.com/go-pkgx/bottle"
 )
 
 func TestRunConfigWarning(t *testing.T) {
@@ -16,9 +18,16 @@ func TestRunConfigWarning(t *testing.T) {
 }
 
 func TestRunEntry(t *testing.T) {
+	bottle.Warn = nil
 	if code := run([]string{"--version"}); code != 0 {
 		t.Errorf("--version code=%d", code)
 	}
+	// run() installs the diagnostic sink: a soname the resolver cannot provide
+	// must reach stderr, not wait for the installed program to fail to start.
+	if bottle.Warn == nil {
+		t.Error("run() must install bottle.Warn")
+	}
+	bottle.Warn("libnope.so.9 is NEEDED but nothing provides it") // must not panic
 	if code := run([]string{"--help"}); code != 0 {
 		t.Errorf("--help code=%d", code)
 	}
