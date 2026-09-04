@@ -1,3 +1,5 @@
 /pkgm
 /pkgm.*
 *.out
+bsd.test
+bsd-tests.list

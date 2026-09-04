@@ -211,6 +211,11 @@ func TestCommandsE2E(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("PKGX_DIR", dir)
 	t.Setenv("PATH", filepath.Join(home, ".local", "bin")) // silence warnPath
+	// Name the prefix rather than inheriting resolvePrefix's default. That
+	// default is euid-dependent — root installs to /usr/local, which is a
+	// first-class mode here — so under a VM or container that runs as root this
+	// test looked for a stub under $HOME that pkgm had correctly put elsewhere.
+	t.Setenv("PKGM_PREFIX", filepath.Join(home, ".local"))
 
 	// install pinned 1.0.0 so outdated has something to report
 	if err := dispatch("install", []string{"acme.org/tool@1.0.0"}, flags{pin: true}); err != nil {
