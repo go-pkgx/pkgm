@@ -28,6 +28,16 @@ jobs:
         goos: [linux, darwin]
         goarch: [amd64, arm64]
         include:
+          # The qemu lanes vary the ARCHITECTURE and hold the OS fixed. The BSDs
+          # are the other dimension: same amd64, a different kernel and libc.
+          - goos: freebsd
+            goarch: amd64
+          - goos: freebsd
+            goarch: arm64
+          - goos: netbsd
+            goarch: amd64
+          - goos: openbsd
+            goarch: amd64
           - goos: linux
             goarch: riscv64
           - goos: linux
@@ -95,3 +105,58 @@ jobs:
         # -count=1 so a cached PASS from the host architecture cannot stand in
         # for a run that never happened under emulation.
         run: go test -count=1 -exec ${{ matrix.qemu }} ./...
+
+  freebsd:
+    name: test (FreeBSD, a kernel that is not Linux)
+    runs-on: ubuntu-latest
+    # Cross-compiling proves the code builds for an OS. It says nothing about
+    # whether it WORKS there, and the bugs a compiler cannot see are the
+    # interesting ones: a path convention, a syscall that behaves differently,
+    # an assumption that /proc is mounted.
+    #
+    # The toolchain never enters the VM — go.mod names a Go version no BSD
+    # package set carries, and a lane that installed one would depend on what a
+    # package mirror happens to hold that day. Same idiom as the qemu lanes:
+    # build here, run there, the VM supplying only a kernel and a libc.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: stable }
+      - name: cross-compile the test binaries
+        run: .github/scripts/bsd-tests.sh build freebsd
+      # Pinned by commit, not by tag: a tag can be moved onto code we never read.
+      - uses: vmactions/freebsd-vm@f0552d3b69211736abd97f02ff3d4674c56b73b1
+        with:
+          usesh: true
+          run: .github/scripts/bsd-tests.sh run
+
+  netbsd:
+    name: test (NetBSD, a kernel that is not Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: stable }
+      - name: cross-compile the test binaries
+        run: .github/scripts/bsd-tests.sh build netbsd
+      - uses: vmactions/netbsd-vm@7f23a491dcc69c34195721ab67934917707f84c7
+        with:
+          usesh: true
+          run: .github/scripts/bsd-tests.sh run
+
+  openbsd:
+    name: test (OpenBSD, the strictest kernel we can reach)
+    runs-on: ubuntu-latest
+    # OpenBSD is the one most likely to find something: W^X is enforced, malloc
+    # is deliberately hostile (junk-filling, guard pages), and syscall origin is
+    # policed. Code that merely happens to work elsewhere tends to stop here.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: stable }
+      - name: cross-compile the test binaries
+        run: .github/scripts/bsd-tests.sh build openbsd
+      - uses: vmactions/openbsd-vm@86cdc08415d9d0865267e686561e276c52d62530
+        with:
+          usesh: true
+          run: .github/scripts/bsd-tests.sh run
