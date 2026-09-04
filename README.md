@@ -25,23 +25,31 @@ static ~9 MB binary:
 
 ## Install
 
-**Linux / macOS** — one line:
+**Linux / macOS** — one line, naming the release you want:
 
 ```sh
-curl -fsSL https://go-pkgx.github.io/install.sh | sh
+curl -fsSL https://go-pkgx.github.io/install.sh | sh -s -- pkgm v0.1.1
 ```
 
-**Windows** — one line (PowerShell):
+**Windows** (PowerShell) — `irm | iex` passes no arguments, so the version goes
+in the environment:
 
 ```powershell
-irm https://go-pkgx.github.io/install.ps1 | iex
+$env:PKGM_VERSION='v0.1.1'; irm https://go-pkgx.github.io/install.ps1 | iex
 ```
 
-The installer downloads the static binary for your os/arch from the latest
-[release](https://github.com/go-pkgx/pkgm/releases/latest), verifies it against
-the release `SHA256SUMS`, and drops `pkgm` on your `PATH`
-(`$HOME/.local/bin`, or `%LOCALAPPDATA%\Programs\go-pkgx` on Windows). Set
-`PKGM_INSTALL` to override the directory on Unix.
+The installer downloads the static binary for your os/arch from that
+[release](https://github.com/go-pkgx/pkgm/releases), verifies it against the
+release `SHA256SUMS`, and drops `pkgm` on your `PATH` (`$HOME/.local/bin`, or
+`%LOCALAPPDATA%\Programs\go-pkgx` on Windows). Set `PKGM_INSTALL` to override
+the directory on Unix.
+
+The version is named on purpose: this line copied today and the same line
+copied in six months install the same bytes, and a bad release does not reach
+everyone who happens to install that hour. To track releases instead, say so —
+`sh -s -- pkgm latest`, or `PKGM_VERSION=latest`, which is also what a bare
+`| sh` has always done. Re-running is the updater; it skips the download when
+the target version is already installed, and `PKGM_FORCE=1` reinstalls anyway.
 
 **Go users**:
 
@@ -194,6 +202,26 @@ the `set -e` semantics they rely on. That is how `git` runs on scratch.
 3. **extract** — stream straight through gzip/xz + tar into `PKGX_DIR`.
 4. **link** — write env-setting stubs (or run through the loader) so the tools
    find their sibling bottles' libraries.
+
+## Where it is proven to work
+
+CI builds nine targets — linux and darwin on amd64 and arm64, plus linux on
+riscv64, ppc64le, s390x and loong64 — and then **runs the suite** on five of
+them under `qemu-user`:
+
+```
+test (arm64, qemu)  test (riscv64, qemu)  test (ppc64le, qemu)
+test (s390x, qemu)  test (loong64, qemu)
+```
+
+Cross-compiling proves the code builds for an architecture. It says nothing
+about whether it works there, and the bugs a compiler cannot see are the
+interesting ones: a byte order read from the host rather than from the format,
+an assumption about int width, a struct laid out differently. s390x is in that
+list because it is big-endian and nothing else here is, and installing a
+package means reading formats this code did not write — ELF headers, OCI
+manifests, tar and xz streams. The lane runs with `-count=1`, so a cached PASS
+from the host architecture cannot stand in for a run that never happened.
 
 ## FROM scratch conformance
 
