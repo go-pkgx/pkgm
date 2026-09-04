@@ -85,7 +85,7 @@ jobs:
     #
     # s390x is here because it is BIG-ENDIAN and nothing else we run is.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: stable
@@ -119,7 +119,7 @@ jobs:
     # package mirror happens to hold that day. Same idiom as the qemu lanes:
     # build here, run there, the VM supplying only a kernel and a libc.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with: { go-version: stable }
       - name: cross-compile the test binaries
@@ -134,7 +134,7 @@ jobs:
     name: test (NetBSD, a kernel that is not Linux)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with: { go-version: stable }
       - name: cross-compile the test binaries
@@ -151,7 +151,7 @@ jobs:
     # is deliberately hostile (junk-filling, guard pages), and syscall origin is
     # policed. Code that merely happens to work elsewhere tends to stop here.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with: { go-version: stable }
       - name: cross-compile the test binaries
