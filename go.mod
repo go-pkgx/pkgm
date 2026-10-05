@@ -2,7 +2,7 @@ module github.com/go-pkgx/pkgm
 
 go 1.27.1
 
-require github.com/go-pkgx/bottle v0.26.1
+require github.com/go-pkgx/bottle v0.27.2
 
 require (
 	github.com/agext/levenshtein v1.2.1 // indirect
