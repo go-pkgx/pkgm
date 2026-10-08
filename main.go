@@ -12,6 +12,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -36,7 +37,7 @@ usage:
   pkgm uninstall|rm <pkg> ...             remove an installation
   pkgm shim|stub    <pkg> ...             create a shim in <prefix>/bin
   pkgm list|ls                            list what's installed
-  pkgm outdated                           list outdated installations
+  pkgm outdated                           what has a newer version (exit 1 if any could not be checked)
   pkgm update|up|upgrade                  update installations to latest
   pkgm pin          <pkg>@version ...     install pinned to an exact version
   pkgm run|x        <pkg> [-- args...]    run a pkg (shell-free; works FROM scratch)
@@ -171,7 +172,7 @@ func dispatch(cmd string, args []string, f flags) error {
 	case "list", "ls":
 		return cmdList(resolvePrefix(f, false))
 	case "outdated":
-		return cmdOutdated(resolvePrefix(f, false))
+		return cmdOutdated(os.Stdout, resolvePrefix(f, false))
 	case "up", "update", "upgrade":
 		return cmdUpdate(resolvePrefix(f, false))
 	case "pin":
@@ -350,21 +351,57 @@ func cmdList(prefix string) error {
 	return nil
 }
 
-func cmdOutdated(prefix string) error {
+// cmdOutdated says which installed packages have a newer version — and, with
+// equal prominence, how many it could not ask about.
+//
+// ⛔ AN ANSWER IT NEVER OBTAINED READS AS A NEGATIVE. Measured 2026-10-08 in a
+// FROM-scratch container with `--network none`: this printed NOTHING and
+// exited 0, with two packages installed and not one of them checked. Every
+// lookup had failed on DNS. The output was indistinguishable from "you are up
+// to date", which is the one thing it had no evidence for.
+//
+// The silence had three sources and they all looked the same: nothing
+// installed, a store entry that did not parse, and a lookup that failed. Each
+// is now said out loud, and a run that could not ask about something exits
+// non-zero — because "I don't know" is not "nothing to do".
+func cmdOutdated(w io.Writer, prefix string) error {
 	dir := bottle.Dir()
-	for _, line := range installedProjects(dir) {
+	lines := installedProjects(dir)
+	var checked, behind int
+	var unchecked []string
+	for _, line := range lines {
 		fields := strings.Fields(line)
 		if len(fields) != 2 {
+			unchecked = append(unchecked, fmt.Sprintf("unreadable store entry %q", line))
 			continue
 		}
 		project, have := fields[0], strings.TrimPrefix(fields[1], "v")
 		latest, err := bottle.PickVersion(project, "*")
 		if err != nil {
+			unchecked = append(unchecked, fmt.Sprintf("%s: %v", project, err))
 			continue
 		}
+		checked++
 		if latest.Raw != have {
-			fmt.Printf("%s %s → %s\n", project, have, latest.Raw)
+			behind++
+			fmt.Fprintf(w, "%s %s → %s\n", project, have, latest.Raw)
 		}
+	}
+	if len(unchecked) > 0 {
+		fmt.Fprintf(w, "\ncould NOT be asked about — these are not an all-clear:\n")
+		for _, u := range unchecked {
+			fmt.Fprintf(w, "  %s\n", u)
+		}
+	}
+	// THE TOTALS ALWAYS, including the zeros: a command that prints nothing
+	// when all is well cannot be told apart from one that failed to look.
+	fmt.Fprintf(w, "\n%d installed, %d checked, %d behind, %d could not be asked\n",
+		len(lines), checked, behind, len(unchecked))
+	if len(lines) == 0 {
+		fmt.Fprintf(w, "no packages installed in %s — is that the right PKGX_DIR?\n", dir)
+	}
+	if len(unchecked) > 0 {
+		return fmt.Errorf("%d of %d installed packages could not be checked", len(unchecked), len(lines))
 	}
 	return nil
 }

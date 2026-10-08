@@ -229,8 +229,17 @@ func TestCommandsE2E(t *testing.T) {
 	if err := cmdList(""); err != nil {
 		t.Fatal(err)
 	}
-	if err := cmdOutdated(""); err != nil { // 1.0.0 -> 2.0.0
+	var out strings.Builder
+	if err := cmdOutdated(&out, ""); err != nil { // 1.0.0 -> 2.0.0
 		t.Fatal(err)
+	}
+	// It is not enough that it returned nil: the point of the command is what
+	// it PRINTS, and this call used to be asserted on its error alone.
+	if !strings.Contains(out.String(), "acme.org/tool 1.0.0 → 2.0.0") {
+		t.Errorf("the outdated package is not reported:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "1 installed, 1 checked, 1 behind, 0 could not be asked") {
+		t.Errorf("the totals are wrong or missing:\n%s", out.String())
 	}
 	if err := cmdUpdate(resolvePrefix(flags{}, false)); err != nil {
 		t.Fatal(err)
@@ -436,5 +445,57 @@ func TestRunAcceptsABinaryThatIsThere(t *testing.T) {
 	}
 	if err := checkRunnable("gnu.org/make", nil, guessed); err != nil {
 		t.Errorf("a package whose guessed binary exists was refused: %v", err)
+	}
+}
+
+// ⛔ AN ANSWER IT NEVER OBTAINED MUST NOT READ AS A NEGATIVE. Measured
+// 2026-10-08 in a FROM-scratch container with `--network none`:
+// `pkgm outdated` printed NOTHING and exited 0, with two packages installed
+// and not one of them checked — every lookup had failed on DNS. The output
+// was indistinguishable from "you are up to date", which is the one thing it
+// had no evidence for.
+func TestOutdatedDoesNotCallAFailedLookupAnAllClear(t *testing.T) {
+	// A server that knows nothing: every lookup 404s, which is what an
+	// unreachable pantry looks like from inside PickVersion.
+	defer fakeServer(t, map[string]fakePkg{})()
+	dir := t.TempDir()
+	t.Setenv("PKGX_DIR", dir)
+	if err := os.MkdirAll(filepath.Join(dir, "acme.org", "ghost", "v1.0.0"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	err := cmdOutdated(&out, "")
+	// THE EXIT STATUS IS PART OF THE ANSWER: a script that reads only the
+	// status would otherwise be told everything is current.
+	if err == nil {
+		t.Error("a run that could not check a single package returned success")
+	}
+	got := out.String()
+	if !strings.Contains(got, "acme.org/ghost") {
+		t.Errorf("the package it could not ask about is not named:\n%s", got)
+	}
+	if !strings.Contains(got, "all-clear") {
+		t.Errorf("the output does not say this is not an all-clear:\n%s", got)
+	}
+	if !strings.Contains(got, "1 installed, 0 checked, 0 behind, 1 could not be asked") {
+		t.Errorf("the totals are wrong or missing:\n%s", got)
+	}
+}
+
+// AN EMPTY STORE SAYS SO AND QUESTIONS ITSELF. Printing nothing is read as
+// "all current"; it is more often the wrong PKGX_DIR.
+func TestOutdatedOfAnEmptyStoreSaysSo(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PKGX_DIR", dir)
+	var out strings.Builder
+	if err := cmdOutdated(&out, ""); err != nil {
+		t.Fatalf("an empty store was an error: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "no packages installed") || !strings.Contains(got, dir) {
+		t.Errorf("an empty store did not question itself:\n%s", got)
+	}
+	if !strings.Contains(got, "0 installed, 0 checked, 0 behind, 0 could not be asked") {
+		t.Errorf("the totals are wrong or missing:\n%s", got)
 	}
 }
