@@ -64,7 +64,7 @@ registry by default.
 
 ```
 pkgm install|i    <pkg>[@version] ...   install to /usr/local (root) or ~/.local
-pkgm uninstall|rm <pkg> ...             remove an installation
+pkgm uninstall|rm <pkg> ...             remove an installation (works offline)
 pkgm shim|stub    <pkg> ...             create a shim in <prefix>/bin
 pkgm list|ls                            list what's installed
 pkgm outdated                           what has a newer version (exit 1 if any could not be checked)
@@ -113,6 +113,38 @@ $ echo $?
 
 An empty store says so and asks whether `PKGX_DIR` was right, rather than
 printing a silence that reads as a clean bill of health.
+
+### `uninstall` asks the machine, not the pantry
+
+It used to fetch the recipe to learn which binaries to unlink. That needs the
+**network** — measured, `pkgm uninstall` failed on a DNS lookup inside a
+`--network none` container — and it is the wrong oracle besides: the recipe
+answers for what the package provides *today*, not for what we actually
+linked, so a `provides:` that changed since the install left stale stubs
+behind.
+
+What pkgm linked is written down on the machine. Every stub ends in
+
+```sh
+exec "<store>/<project>/v<version>/bin/<name>" "$@"
+```
+
+so a package's stubs are the ones that **exec** out of its store directory.
+Exact, offline, and it cannot delete a same-named program somebody else put in
+the prefix.
+
+Two traps live in that match, and both were caught by running it rather than
+reading it:
+
+- the marker is `<store>/<project>/v`, **with the version segment**. Without
+  it, uninstalling `gnu.org/gcc` also unlinks `gnu.org/gcc/libstdcxx`.
+- only the **exec line** counts. A stub also exports an `LD_LIBRARY_PATH`
+  naming every library directory in the closure, so searching the whole file
+  removed a sibling's program: `uninstall stedolan.github.io/jq` took
+  `onig-config` with it. The unit test missed that one because its fixture
+  wrote `LD_LIBRARY_PATH="/x"` by hand; the test that replaced it builds its
+  stubs with the real `StubBins`, and checks the fixture reproduces the hazard
+  before concluding anything from its own success.
 
 ### `~/.pkgx/config.hcl2`
 

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -497,5 +498,203 @@ func TestOutdatedOfAnEmptyStoreSaysSo(t *testing.T) {
 	}
 	if !strings.Contains(got, "0 installed, 0 checked, 0 behind, 0 could not be asked") {
 		t.Errorf("the totals are wrong or missing:\n%s", got)
+	}
+}
+
+// --- uninstall --------------------------------------------------------------
+
+// stubFor writes the kind of file StubBins writes: a shell stub whose exec
+// line names the binary inside the package's store directory. That exec line
+// is the only durable record of what pkgm linked and for whom.
+func stubFor(t *testing.T, binDir, storeDir, project, version, name string, siblings ...string) string {
+	t.Helper()
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	real := filepath.Join(storeDir, project, "v"+version, "bin", name)
+	p := filepath.Join(binDir, name)
+	// ⛔ LD_LIBRARY_PATH NAMES THE WHOLE CLOSURE, not just this package. The
+	// first version of this helper wrote LD_LIBRARY_PATH="/x" — a stub that
+	// diverged from a real one at precisely the point under test — and the
+	// test passed while `pkgm uninstall jq` removed oniguruma's program in a
+	// container. siblings are the other store paths a real stub would carry.
+	libs := []string{filepath.Join(storeDir, project, "v"+version, "lib")}
+	libs = append(libs, siblings...)
+	body := "#!/bin/sh\nexport LD_LIBRARY_PATH=\"" + strings.Join(libs, ":") + "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\nexec \"" + real + "\" \"$@\"\n"
+	if err := os.WriteFile(p, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// ⛔ THE SEPARATOR IS THE RULE, as in every prefix match. Without the version
+// segment in the marker, uninstalling gnu.org/gcc also unlinks
+// gnu.org/gcc/libstdcxx — a different package whose store path merely starts
+// the same way, and one that half the C++ bottles depend on.
+func TestUninstallDoesNotTakeASubprojectWithIt(t *testing.T) {
+	store, prefix := t.TempDir(), t.TempDir()
+	binDir := filepath.Join(prefix, "bin")
+	// Each carries the OTHER's library directory, because that is what a real
+	// closure stub does — and it is what made a substring search over the
+	// whole file remove a sibling's program.
+	gccLib := filepath.Join(store, "gnu.org/gcc", "v14.2.0", "lib")
+	cxxLib := filepath.Join(store, "gnu.org/gcc/libstdcxx", "v14.2.0", "lib")
+	gcc := stubFor(t, binDir, store, "gnu.org/gcc", "14.2.0", "gcc", cxxLib)
+	libstdcxx := stubFor(t, binDir, store, "gnu.org/gcc/libstdcxx", "14.2.0", "c++filt", gccLib)
+	// Somebody else's program, same name as nothing of ours — and a real
+	// binary, not a stub, so it also proves a non-stub file is left alone.
+	theirs := filepath.Join(binDir, "gcc-wrapper")
+	if err := os.WriteFile(theirs, []byte{0x7f, 'E', 'L', 'F', 0, 0, 0, 0}, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := removeStubsInto(binDir, store, "gnu.org/gcc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || removed[0] != gcc {
+		t.Errorf("removed %v, want just %s", removed, gcc)
+	}
+	if _, err := os.Stat(libstdcxx); err != nil {
+		t.Errorf("uninstalling gnu.org/gcc took gnu.org/gcc/libstdcxx with it: %v", err)
+	}
+	if _, err := os.Stat(theirs); err != nil {
+		t.Errorf("a file that is not one of our stubs was removed: %v", err)
+	}
+}
+
+// ⛔ UNINSTALL MUST NOT NEED THE NETWORK. Measured 2026-10-08 in a
+// FROM-scratch container with `--network none`: it failed on a DNS lookup,
+// because it asked the PANTRY which binaries to delete. The pantry is also
+// the wrong oracle — it answers for the recipe as it stands today, not for
+// what we actually linked, so a `provides:` that changed since the install
+// left stale stubs behind.
+func TestUninstallWorksWithNoNetworkAtAll(t *testing.T) {
+	store, prefix := t.TempDir(), t.TempDir()
+	// A port nothing listens on: any fetch fails at once, loudly.
+	oldDist, oldPantry := bottle.DistBase, bottle.PantryBase
+	bottle.DistBase, bottle.PantryBase = "http://127.0.0.1:1", "http://127.0.0.1:1"
+	defer func() { bottle.DistBase, bottle.PantryBase = oldDist, oldPantry }()
+	t.Setenv("PKGX_DIR", store)
+
+	stub := stubFor(t, filepath.Join(prefix, "bin"), store, "acme.org/tool", "1.0.0", "tool")
+	if err := os.MkdirAll(filepath.Join(store, "acme.org/tool", "v1.0.0", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cmdUninstall([]string{"acme.org/tool"}, prefix); err != nil {
+		t.Fatalf("uninstall needed the network: %v", err)
+	}
+	if _, err := os.Stat(stub); !os.IsNotExist(err) {
+		t.Errorf("the stub survived: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(store, "acme.org/tool")); !os.IsNotExist(err) {
+		t.Errorf("the store directory survived: %v", err)
+	}
+}
+
+// A REMOVAL THAT REMOVED NOTHING SAYS SO. Printing nothing is how this
+// command reported both success and "that was never installed".
+func TestUninstallSaysWhatItDid(t *testing.T) {
+	store, prefix := t.TempDir(), t.TempDir()
+	t.Setenv("PKGX_DIR", store)
+	out := captureStdout(t, func() {
+		if err := cmdUninstall([]string{"acme.org/ghost"}, prefix); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(out, "not installed") || !strings.Contains(out, "acme.org/ghost") {
+		t.Errorf("a package that was never installed got no answer:\n%s", out)
+	}
+
+	stubFor(t, filepath.Join(prefix, "bin"), store, "acme.org/tool", "1.0.0", "tool")
+	if err := os.MkdirAll(filepath.Join(store, "acme.org/tool", "v1.0.0"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out = captureStdout(t, func() {
+		if err := cmdUninstall([]string{"acme.org/tool"}, prefix); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(out, "removed") || !strings.Contains(out, "1 stub(s)") {
+		t.Errorf("a real removal was not reported:\n%s", out)
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+	done := make(chan string, 1)
+	go func() {
+		var b strings.Builder
+		_, _ = io.Copy(&b, r)
+		done <- b.String()
+	}()
+	fn()
+	w.Close()
+	os.Stdout = old
+	return <-done
+}
+
+// ⛔⛔ THE FIXTURE THAT CANNOT DIVERGE: these stubs are written by the REAL
+// bottle.StubBins, through the fake pantry, rather than by hand.
+//
+// Measured 2026-10-08 in a FROM-scratch container:
+// `pkgm uninstall stedolan.github.io/jq` also removed /opt/bin/onig-config —
+// oniguruma's program. A stub exports LD_LIBRARY_PATH holding EVERY library
+// directory in the closure, so a substring search over the whole file matches
+// every sibling of the same install. The hand-written fixture wrote
+// LD_LIBRARY_PATH="/x" and saw none of it.
+func TestUninstallLeavesTheClosureSiblingsAlone(t *testing.T) {
+	defer fakeServer(t, map[string]fakePkg{
+		"acme.org/tool": {
+			versions: []string{"1.0.0"},
+			yaml:     "provides:\n  - bin/tool\n",
+			files:    map[string]string{"bin/tool": "#!x\n", "lib/libtool.so": "x"},
+		},
+		"acme.org/other": {
+			versions: []string{"1.0.0"},
+			yaml:     "provides:\n  - bin/other\n",
+			files:    map[string]string{"bin/other": "#!x\n", "lib/libother.so": "x"},
+		},
+	})()
+	home, store := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PKGX_DIR", store)
+	prefix := filepath.Join(home, ".local")
+	t.Setenv("PKGM_PREFIX", prefix)
+	t.Setenv("PATH", filepath.Join(prefix, "bin"))
+
+	// ONE install, so both stubs share the closure's LD_LIBRARY_PATH — which
+	// is the whole hazard.
+	if err := dispatch("install", []string{"acme.org/tool", "acme.org/other"}, flags{}); err != nil {
+		t.Fatal(err)
+	}
+	toolStub := filepath.Join(prefix, "bin", "tool")
+	otherStub := filepath.Join(prefix, "bin", "other")
+	b, err := os.ReadFile(otherStub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// THE POSITIVE CONTROL ON THE FIXTURE ITSELF. If the sibling's stub does
+	// not mention acme.org/tool, this test cannot witness the defect it
+	// exists for, and its passing would mean nothing.
+	if !strings.Contains(string(b), filepath.Join(store, "acme.org/tool")) {
+		t.Fatalf("the fixture does not reproduce the hazard — acme.org/other's stub never names acme.org/tool:\n%s", b)
+	}
+
+	if err := cmdUninstall([]string{"acme.org/tool"}, prefix); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(toolStub); !os.IsNotExist(err) {
+		t.Errorf("the uninstalled package's stub survived: %v", err)
+	}
+	if _, err := os.Stat(otherStub); err != nil {
+		t.Errorf("a sibling in the same closure lost its stub: %v", err)
 	}
 }

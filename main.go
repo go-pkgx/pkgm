@@ -11,8 +11,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -34,7 +36,7 @@ var usage = `pkgm ` + version + ` — pure-Go pkgx package manager
 usage:
   pkgm install|i    <pkg>[@version] ...   install to /usr/local (root) or ~/.local
                     -f <file>             ... or read the list from a file
-  pkgm uninstall|rm <pkg> ...             remove an installation
+  pkgm uninstall|rm <pkg> ...             remove an installation (works offline)
   pkgm shim|stub    <pkg> ...             create a shim in <prefix>/bin
   pkgm list|ls                            list what's installed
   pkgm outdated                           what has a newer version (exit 1 if any could not be checked)
@@ -322,6 +324,23 @@ func cmdShim(args []string, prefix string) error {
 	return nil
 }
 
+// cmdUninstall removes a package's stubs and its store directory.
+//
+// ⛔ IT USED TO ASK THE PANTRY WHAT TO DELETE, WHICH IS THE WRONG ORACLE AND
+// NEEDS THE NETWORK. Measured 2026-10-08 in a FROM-scratch container with
+// `--network none`: `pkgm uninstall gnu.org/bash` failed outright on a DNS
+// lookup. You could not uninstall offline — and on a host whose pantry has
+// moved on, the names it fetched were the names the recipe provides TODAY,
+// not the ones we actually linked, so a `provides:` that changed since the
+// install left stale stubs behind and removed nothing.
+//
+// What we linked is written down on the machine: every stub ends in
+//
+//	exec "<store>/<project>/v<version>/bin/<name>" "$@"
+//
+// so the stubs that belong to a package are the ones that point into its
+// store directory. That is exact, it is offline, and it cannot delete a
+// same-named binary somebody else put in the prefix.
 func cmdUninstall(args []string, prefix string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("no packages specified")
@@ -329,19 +348,111 @@ func cmdUninstall(args []string, prefix string) error {
 	dir := bottle.Dir()
 	for _, a := range args {
 		project, _ := parseReq(a, false)
-		_, provides, err := bottle.FetchMeta(project)
+		removed, err := removeStubsInto(filepath.Join(prefix, "bin"), dir, project)
 		if err != nil {
-			return err
+			return fmt.Errorf("%s: %w", project, err)
 		}
-		for _, name := range bottle.BinNames(project, provides) {
-			link := filepath.Join(prefix, "bin", name)
-			if err := os.Remove(link); err == nil {
-				fmt.Printf("  removed %s\n", link)
-			}
+		for _, link := range removed {
+			fmt.Printf("  removed %s\n", link)
 		}
-		_ = os.RemoveAll(filepath.Join(dir, project))
+		store := filepath.Join(dir, project)
+		_, statErr := os.Stat(store)
+		if err := os.RemoveAll(store); err != nil {
+			return fmt.Errorf("%s: %w", project, err)
+		}
+		// SAY WHAT HAPPENED, including when it was nothing: a command that
+		// removes files and prints nothing cannot be told apart from one that
+		// found nothing to remove.
+		switch {
+		case statErr == nil:
+			fmt.Printf("%s: removed %s and %d stub(s)\n", project, store, len(removed))
+		case len(removed) > 0:
+			fmt.Printf("%s: not in %s; removed %d orphaned stub(s)\n", project, dir, len(removed))
+		default:
+			fmt.Printf("%s: not installed in %s — nothing to remove\n", project, dir)
+		}
 	}
 	return nil
+}
+
+// removeStubsInto deletes the stubs in binDir that exec a binary out of
+// project's store directory, and returns the paths it removed.
+//
+// ⛔ THE SEPARATOR IS THE RULE, as it is in every prefix match. The marker is
+// "<store>/<project>/v", not "<store>/<project>": without the version segment,
+// uninstalling gnu.org/gcc would also unlink gnu.org/gcc/libstdcxx, a
+// different package whose path merely starts the same way.
+//
+// A file that is not one of our stubs is left alone in silence — the prefix's
+// bin directory is full of other people's programs.
+func removeStubsInto(binDir, storeDir, project string) ([]string, error) {
+	marker := filepath.Join(storeDir, project) + string(filepath.Separator) + "v"
+	entries, err := os.ReadDir(binDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var removed []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		p := filepath.Join(binDir, e.Name())
+		// A stub is a few hundred bytes of shell. Reading one is cheap; the
+		// cap keeps a real binary that landed here from being slurped whole.
+		b, err := readHead(p, 8192)
+		if err != nil || !strings.HasPrefix(stubTarget(b), marker) {
+			continue
+		}
+		if err := os.Remove(p); err != nil {
+			return removed, err
+		}
+		removed = append(removed, p)
+	}
+	return removed, nil
+}
+
+// stubTarget returns the binary a stub execs, or "" if the bytes are not one
+// of our stubs.
+//
+// ⛔ ONLY THE EXEC LINE SAYS WHOSE STUB THIS IS. A stub also exports
+// LD_LIBRARY_PATH holding EVERY library directory in the closure, so a
+// substring search over the whole file matches every sibling in the same
+// install. Measured 2026-10-08 in a FROM-scratch container:
+// `pkgm uninstall stedolan.github.io/jq` removed /opt/bin/onig-config too —
+// oniguruma's program, matched on jq's lib path inside its environment line.
+//
+// The unit test did not see it: its fixture wrote LD_LIBRARY_PATH="/x",
+// a hand-written stub that diverged from a real one at precisely the point
+// under test.
+func stubTarget(b []byte) string {
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		rest, ok := strings.CutPrefix(line, `exec "`)
+		if !ok {
+			continue
+		}
+		if i := strings.Index(rest, `"`); i >= 0 {
+			return rest[:i]
+		}
+	}
+	return ""
+}
+
+func readHead(path string, max int) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	b := make([]byte, max)
+	n, err := f.Read(b)
+	if err != nil && n == 0 {
+		return nil, err
+	}
+	return b[:n], nil
 }
 
 func cmdList(prefix string) error {
