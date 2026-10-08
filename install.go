@@ -35,6 +35,11 @@ func cmdRun(args []string) error {
 	}
 	prefix := bottle.PrefixOf(project, closure, dir)
 	binPath := bottle.ResolveBinPath(filepath.Join(prefix, "bin", bottle.PrimaryBin(project, provides)))
+	// BEFORE anything is launched, and before the wrapper detection below
+	// installs a shell for a target that is not there.
+	if err := checkRunnable(project, provides, binPath); err != nil {
+		return err
+	}
 	libPath := bottle.LibPath(closure, dir)
 	var shellPath string
 	var pathDirs []string
@@ -90,4 +95,41 @@ func cmdRun(args []string) error {
 	}
 	argv := append([]string{binPath}, rest...)
 	return bottle.Exec(binPath, argv, env)
+}
+
+// checkRunnable refuses, in words, a package that has nothing to run.
+//
+// ⛔ THE NAME OF THE BINARY IS A GUESS WHEN A PACKAGE DECLARES NOTHING.
+// BinNames falls back to the project's leaf name for a recipe with no
+// `provides:`, so `pkgm run zlib.net` looked for a program called "zlib.net"
+// — a file nobody had ever mentioned. Handing that path to exec produced the
+// kernel's own answer and nothing else:
+//
+//	pkgm: no such file or directory
+//
+// That sentence names neither the package, nor the file, nor the only fact
+// that matters: zlib is a LIBRARY. Measured 2026-10-08 in a FROM-scratch
+// image, after the whole closure had already been downloaded — so the reader
+// is told at the very end, in the most opaque way available, something that
+// was knowable from the recipe.
+//
+// It still refuses at the end, deliberately. An empty `provides:` could be
+// read from the recipe before a single byte is fetched, but it does not mean
+// "no command" on its own — several recipes ship a binary they never declare,
+// and the guessed name finds it. The only honest question is whether the file
+// is THERE, and that one cannot be asked before the bottle is unpacked.
+//
+// The two cases are kept apart because they ask for different things. An
+// empty `provides:` is the package working as intended and the REQUEST being
+// wrong. A declared command that is missing from the bottle is the package,
+// or our build of it, being wrong — so that one names the path, which is what
+// somebody would need in order to go and look.
+func checkRunnable(project string, provides []string, binPath string) error {
+	if _, err := os.Stat(binPath); err == nil {
+		return nil
+	}
+	if len(provides) == 0 {
+		return fmt.Errorf("%s provides no command: it is a library, not a program — `pkgm install %s` installs its files, but there is nothing to run", project, project)
+	}
+	return fmt.Errorf("%s declares %s, but %s is not in the installed bottle", project, strings.Join(provides, ", "), binPath)
 }
