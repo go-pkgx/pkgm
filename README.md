@@ -67,7 +67,7 @@ pkgm install|i    <pkg>[@version] ...   install to /usr/local (root) or ~/.local
 pkgm uninstall|rm <pkg> ...             remove an installation
 pkgm shim|stub    <pkg> ...             create a shim in <prefix>/bin
 pkgm list|ls                            list what's installed
-pkgm outdated                           list outdated installations
+pkgm outdated                           what has a newer version (exit 1 if any could not be checked)
 pkgm update|up|upgrade                  update installations to latest
 pkgm pin          <pkg>@version ...     install pinned to an exact version
 pkgm run|x        <pkg> [-- args...]    run a pkg (works FROM scratch)
@@ -87,6 +87,32 @@ set `PKGX_DIST=https://dist.pkgx.dev` together with `PKGX_VERIFY=0`.
 The `install`/`uninstall`/`shim`/`list`/`outdated`/`update`/`pin` command
 surface and the `~/.local` vs `/usr/local` prefix logic mirror the reference
 `pkgm`, so it is a drop-in replacement.
+
+### `outdated` does not confuse "nothing to do" with "I could not ask"
+
+Measured in a `FROM scratch` container with `--network none`: `outdated` used
+to print **nothing** and exit **0**, with two packages installed and not one of
+them checked — every lookup had failed on DNS. That output cannot be told apart
+from "you are up to date", which is the one thing it had no evidence for.
+
+It now prints its totals every time, including the zeros, names what it could
+not reach, and exits **1** if anything went unchecked:
+
+```sh
+$ docker run --rm --network none -v store:/pkgx pkgm-scratch outdated
+pkgm: 1 of 1 installed packages could not be checked
+
+could NOT be asked about — these are not an all-clear:
+  github.com/kkos/oniguruma: Get "https://ghcr.io/v2/…/tags/list": dial tcp:
+  lookup ghcr.io: network is unreachable
+
+1 installed, 0 checked, 0 behind, 1 could not be asked
+$ echo $?
+1
+```
+
+An empty store says so and asks whether `PKGX_DIR` was right, rather than
+printing a silence that reads as a clean bill of health.
 
 ### `~/.pkgx/config.hcl2`
 
