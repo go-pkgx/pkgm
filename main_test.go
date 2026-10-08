@@ -370,3 +370,71 @@ func TestParseArgsFileFlag(t *testing.T) {
 		t.Fatalf("dangling -f → %v", f.files)
 	}
 }
+
+// ⛔ A LIBRARY HAS NO COMMAND, AND THE KERNEL CANNOT SAY SO. Measured
+// 2026-10-08 against the real registry in a FROM-scratch image:
+// `pkgm run zlib.net -- --version` downloaded the entire closure and then
+// printed "pkgm: no such file or directory". zlib.net declares `provides: []`,
+// so the binary name was invented from the project's leaf name and exec'd
+// blind. The message names neither the package nor the reason.
+func TestRunRefusesAPackageWithNoCommand(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "zlib.net")
+	err := checkRunnable("zlib.net", nil, missing)
+	if err == nil {
+		t.Fatal("a package with no command was accepted for running")
+	}
+	got := err.Error()
+	// THE PACKAGE IS NAMED. The defect was an error that named nothing.
+	if !strings.Contains(got, "zlib.net") {
+		t.Errorf("the package is not named: %q", got)
+	}
+	// AND THE REASON IS GIVEN, in the reader's terms: it is a library.
+	if !strings.Contains(got, "library") {
+		t.Errorf("the reason is not given: %q", got)
+	}
+	// ⛔ THE REGRESSION ITSELF: the bare errno sentence, which is what the
+	// kernel supplied and what this exists to replace.
+	if strings.Contains(got, "no such file or directory") {
+		t.Errorf("still the kernel's own message: %q", got)
+	}
+}
+
+// A DECLARED COMMAND THAT IS MISSING IS A DIFFERENT FAULT — the package is
+// wrong, or our build of it is — so that one names the path somebody would
+// have to go and look at.
+func TestRunNamesAMissingDeclaredCommand(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "jq")
+	err := checkRunnable("stedolan.github.io/jq", []string{"bin/jq"}, missing)
+	if err == nil {
+		t.Fatal("a missing declared command was accepted for running")
+	}
+	got := err.Error()
+	if !strings.Contains(got, "bin/jq") || !strings.Contains(got, missing) {
+		t.Errorf("neither what was declared nor where we looked: %q", got)
+	}
+	// It must NOT claim the package is a library: it declares a command.
+	if strings.Contains(got, "library") {
+		t.Errorf("a package that declares a command was called a library: %q", got)
+	}
+}
+
+// AND THE POSITIVE CONTROL, without which the two refusals above would pass
+// just as well on a check that refused everything.
+func TestRunAcceptsABinaryThatIsThere(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "jq")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkRunnable("stedolan.github.io/jq", []string{"bin/jq"}, bin); err != nil {
+		t.Errorf("a binary that exists was refused: %v", err)
+	}
+	// A package with no `provides:` whose guessed name HAPPENS to be right is
+	// still runnable — the guess is only ever wrong when the file is absent.
+	guessed := filepath.Join(t.TempDir(), "make")
+	if err := os.WriteFile(guessed, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkRunnable("gnu.org/make", nil, guessed); err != nil {
+		t.Errorf("a package whose guessed binary exists was refused: %v", err)
+	}
+}

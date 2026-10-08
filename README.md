@@ -190,6 +190,27 @@ target and any children — resolves its `PT_INTERP` natively. Using the real
 pkgx bash (rather than reimplementing a shell) means the wrappers get exactly
 the `set -e` semantics they rely on. That is how `git` runs on scratch.
 
+### a package with no command
+
+Not every package is a program. A recipe with an empty `provides:` ships
+headers and a `.so`, and the binary name pkgm would run is a **guess** — the
+project's leaf name, which is the right answer often enough to keep, and no
+answer at all for a library.
+
+`run` says which it is, rather than handing you the kernel's reply to a path
+you never asked about:
+
+```sh
+$ pkgm run zlib.net -- --version
+pkgm: zlib.net provides no command: it is a library, not a program — `pkgm install zlib.net` installs its files, but there is nothing to run
+```
+
+A **declared** command that is missing is a different fault — the package, or
+our build of it — so that one names the path instead, which is what you would
+need in order to go and look.
+
+`install` was always honest here (`linked 0 binaries`); only `run` was not.
+
 ## How it works
 
 1. **resolve** — read `<project>/package.yml` from the pkgx pantry and walk the
