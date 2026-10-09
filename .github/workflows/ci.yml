@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.2'
       - run: go vet ./...
       - run: go test -race -coverprofile=cov.out ./...
       - run: go tool cover -func=cov.out | tail -1
@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.2'
       # A CGO_ENABLED=0 build must be fully static on every 64-bit target,
       # so pkgm can ship on a `FROM scratch` image for each arch.
       - env:
@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.2'
       - name: qemu-user
         run: |
           sudo apt-get update -qq
@@ -121,7 +121,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
-        with: { go-version: '1.27.1' }
+        with: { go-version: '1.27.2' }
       - name: cross-compile the test binaries
         run: .github/scripts/bsd-tests.sh build freebsd
       # Pinned by commit, not by tag: a tag can be moved onto code we never read.
@@ -136,7 +136,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
-        with: { go-version: '1.27.1' }
+        with: { go-version: '1.27.2' }
       - name: cross-compile the test binaries
         run: .github/scripts/bsd-tests.sh build netbsd
       - uses: vmactions/netbsd-vm@7f23a491dcc69c34195721ab67934917707f84c7
@@ -153,7 +153,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
-        with: { go-version: '1.27.1' }
+        with: { go-version: '1.27.2' }
       - name: cross-compile the test binaries
         run: .github/scripts/bsd-tests.sh build openbsd
       - uses: vmactions/openbsd-vm@86cdc08415d9d0865267e686561e276c52d62530
