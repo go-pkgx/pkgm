@@ -1,0 +1,63 @@
+# pkgm-service project=github.com/go-authn/revocation store=/opt/pkgx
+#
+# Written by `pkgm service install` from the service block of the
+# github.com/go-authn/revocation recipe. pkgm rewrites this file: put local changes
+# in a drop-in instead (systemctl edit authn-revokd@.service).
+#
+# The instance is the VERSION: authn-revokd@<version>.service runs
+# /opt/pkgx/github.com/go-authn/revocation/v<version>/bin/authn-revokd.
+
+[Unit]
+Description=go-authn revocation list agent (SSH KRLs, X.509 CRLs)
+Documentation=https://github.com/go-authn/revocation
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/opt/pkgx/github.com/go-authn/revocation/v%i/bin/authn-revokd -config /etc/authn-revokd/revokd.hcl
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5s
+
+User=authn-revokd
+Group=authn-revokd
+UMask=0077
+StateDirectory=authn-revokd
+StateDirectoryMode=0755
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+PrivateUsers=yes
+
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+DevicePolicy=closed
+ProtectProc=invisible
+ProcSubset=pid
+RemoveIPC=yes
+PrivateIPC=yes
+
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

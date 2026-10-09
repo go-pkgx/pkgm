@@ -45,6 +45,11 @@ usage:
   pkgm run|x        <pkg> [-- args...]    run a pkg (shell-free; works FROM scratch)
   pkgm image        <pkg>                 emit a FROM-scratch Containerfile that
                                           installs <pkg> with pkgm, in the image
+  pkgm service install  <pkg>[@version]  run <pkg> as a systemd service, that version
+  pkgm service switch   <pkg>@version   move the service to another version
+  pkgm service rollback <svc>            return to the version before the last switch
+  pkgm service list                      which version each service runs
+  pkgm service remove   <svc>            stop and disable it, delete its unit
 
 flags:
   -h, --help        show this help
@@ -184,6 +189,8 @@ func dispatch(cmd string, args []string, f flags) error {
 		return cmdRun(args)
 	case "image":
 		return cmdImage(args)
+	case "service":
+		return cmdService(args, os.Stdout)
 	default:
 		return fmt.Errorf("unknown command %q (try --help)", cmd)
 	}
@@ -346,6 +353,17 @@ func cmdUninstall(args []string, prefix string) error {
 		return fmt.Errorf("no packages specified")
 	}
 	dir := bottle.Dir()
+	projects := make([]string, 0, len(args))
+	for _, a := range args {
+		project, _ := parseReq(a, false)
+		projects = append(projects, project)
+	}
+	// BEFORE ANYTHING IS DELETED, stubs included, and for every argument at
+	// once: a refused uninstall is a complete no-op, not one that removed the
+	// first two packages and then stopped at the third.
+	if err := refuseUninstallInUse(projects, dir); err != nil {
+		return err
+	}
 	for _, a := range args {
 		project, _ := parseReq(a, false)
 		removed, err := removeStubsInto(filepath.Join(prefix, "bin"), dir, project)

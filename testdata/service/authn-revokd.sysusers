@@ -1,0 +1,8 @@
+# pkgm-service project=github.com/go-authn/revocation store=/opt/pkgx
+#
+# The account authn-revokd@.service runs as, written by `pkgm service install`.
+# A static account, not DynamicUser=: its files must keep one owner across
+# versions, reinstalls and restores.
+#
+#Type Name ID GECOS Home Shell
+u authn-revokd - "go-authn revocation list agent (SSH KRLs, X.509 CRLs)" /var/lib/authn-revokd -
