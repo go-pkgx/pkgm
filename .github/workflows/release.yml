@@ -32,6 +32,13 @@ jobs:
           set -eu
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             tag="$INPUT_TAG"
+            # ⛔ A DISPATCH CHECKS OUT THE DEFAULT BRANCH, NOT THE TAG.
+            # Without this line the run builds whatever main holds and
+            # uploads it under the tag's name. Measured 2026-10-09 on
+            # go-pkgx/mirror: a re-run of v0.3.10 replaced its assets with
+            # binaries stamped `v0.0.0-20261009064454-6f82d049bd0e` — a
+            # pseudo-version, which is Go saying "this commit is not a tag".
+            git checkout "$tag"
           else
             tag="$REF_NAME"
           fi
@@ -98,6 +105,16 @@ jobs:
             name=$(basename "$bin")
             info=$(go version -m "$bin")
             mod=$(printf '%s\n' "$info" | awk '$1=="mod" {print $3; exit}')
+            # ⛔ EQUALITY WITH THE TAG, not merely "not dirty". A dispatch
+            # that rebuilt main under a tag sailed through the +dirty test:
+            # the binaries were CLEAN and stamped `v0.0.0-<date>-<sha>`.
+            # The printed-version check passes there too, because
+            # `-X main.version=${TAG#v}` stamps the tag INPUT regardless of
+            # what was compiled.
+            if [ "$mod" != "$TAG" ]; then
+              echo "::error::$name stamps $mod but this is $TAG — it was not built from the tag"
+              bad=1
+            fi
             case "$mod" in
               *+dirty)
                 echo "::error::$name: build info says $mod — the work tree was dirty"
