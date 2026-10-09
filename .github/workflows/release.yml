@@ -42,12 +42,29 @@ jobs:
       # pkgm-<os>-<arch> (windows: .exe), and record a SHA256SUMS manifest.
       # The release version (tag without the leading "v") is injected into
       # main.version via -ldflags so `pkgm --version` matches the tag.
+      # ⛔ dist/ MUST NOT LIVE IN THE CHECKOUT. Go stamps the main module
+      # from the work tree's VCS state, so the moment the first binary lands
+      # in an untracked dist/ the tree is dirty and every LATER build in this
+      # loop is stamped `+dirty` with `vcs.modified=true`.
+      #
+      # Measured on the published v0.2.10 assets, which is also the shape of
+      # the trap: the FIRST target is clean and the rest are not.
+      #
+      #   pkgm-linux-amd64    v0.2.10
+      #   pkgm-linux-arm64    v0.2.10+dirty
+      #   pkgm-darwin-amd64   v0.2.10+dirty
+      #   pkgm-darwin-arm64   v0.2.10+dirty
+      #
+      # An empty directory is invisible to git, so `mkdir dist` alone is
+      # harmless — it is the first `-o dist/...` that does it. A guard that
+      # checked one binary could therefore check the clean one and pass.
       - name: Build release binaries
         env:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -eu
-          mkdir dist
+          DIST="$RUNNER_TEMP/dist"
+          mkdir -p "$DIST"
           for target in \
             linux/amd64 linux/arm64 \
             darwin/amd64 darwin/arm64 \
@@ -60,11 +77,47 @@ jobs:
             fi
             echo "building $out"
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-              go build -trimpath -ldflags="-s -w -X main.version=${TAG#v}" -o "dist/${out}" .
+              go build -trimpath -ldflags="-s -w -X main.version=${TAG#v}" -o "$DIST/${out}" .
           done
-          cd dist
+          cd "$DIST"
           sha256sum pkgm-* > SHA256SUMS
           cat SHA256SUMS
+
+      # EVERY binary, not one, and EQUALITY, not "contains the tag".
+      # `case "$got" in *"$TAG"*` is the spelling that lets v0.2.10+dirty
+      # through, which is how this went unnoticed through ten releases.
+      - name: Refuse a dirty or mis-stamped build
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -eu
+          DIST="$RUNNER_TEMP/dist"
+          want="${TAG#v}"
+          bad=0
+          for bin in "$DIST"/pkgm-*; do
+            name=$(basename "$bin")
+            info=$(go version -m "$bin")
+            mod=$(printf '%s\n' "$info" | awk '$1=="mod" {print $3; exit}')
+            case "$mod" in
+              *+dirty)
+                echo "::error::$name: build info says $mod — the work tree was dirty"
+                bad=1
+                ;;
+            esac
+            if printf '%s\n' "$info" | grep -q 'vcs\.modified=true'; then
+              echo "::error::$name: vcs.modified=true"
+              bad=1
+            fi
+            echo "$name: $mod"
+          done
+          # And the version it PRINTS: the ldflags stamp is what users see,
+          # and it is set independently of the build info above.
+          got=$("$DIST/pkgm-linux-amd64" --version | awk '{print $2}')
+          if [ "$got" != "$want" ]; then
+            echo "::error::pkgm --version says '$got', want exactly '$want'"
+            bad=1
+          fi
+          exit "$bad"
 
       - name: Publish GitHub Release
         env:
@@ -72,10 +125,11 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -eu
+          DIST="$RUNNER_TEMP/dist"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/* --clobber
+            gh release upload "$TAG" "$DIST"/* --clobber
           else
-            gh release create "$TAG" dist/* \
+            gh release create "$TAG" "$DIST"/* \
               --title "$TAG" \
               --notes "Static, dependency-free pkgm binaries (CGO_ENABLED=0) for linux, darwin and windows on amd64 and arm64. Verify downloads against SHA256SUMS. Install THIS release with: curl -fsSL https://go-pkgx.github.io/install.sh | sh -s -- pkgm $TAG"
           fi
