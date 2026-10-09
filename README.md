@@ -71,6 +71,7 @@ pkgm outdated                           what has a newer version (exit 1 if any 
 pkgm update|up|upgrade                  update installations to latest
 pkgm pin          <pkg>@version ...     install pinned to an exact version
 pkgm run|x        <pkg> [-- args...]    run a pkg (works FROM scratch)
+pkgm service      install|switch|rollback|list|remove   run a daemon under systemd, by version
 
 flags: -h/--help  -v/--version  -p/--pin  -P/--prefix DIR  -s/--from-scratch
 env:   PKGX_DIR     bottle store (default: ~/.pkgx)
@@ -145,6 +146,97 @@ reading it:
   wrote `LD_LIBRARY_PATH="/x"` by hand; the test that replaced it builds its
   stubs with the real `StubBins`, and checks the fixture reproduces the hazard
   before concluding anything from its own success.
+
+### `pkgm service`: a package's daemon, supervised and versioned
+
+```
+pkgm service install  <pkg>[@version]   install it, write its unit and account, enable and start it
+pkgm service switch   <pkg>@version     move the service to another version
+pkgm service rollback <svc>             back to the version before the last switch (offline)
+pkgm service list                       which version each service runs
+pkgm service remove   <svc>             stop and disable every instance, delete the unit
+```
+
+A recipe that ships a daemon says how to run it in a `service "<name>" { … }`
+block (see [bottle](https://github.com/go-pkgx/bottle#a-recipe-can-declare-a-service)).
+pkgm **renders** the systemd unit from that data. No unit file comes in the
+bottle. The hardening every service shares is written once, here, and the
+recipe states only what differs between daemons.
+
+**One template per service, and the instance is the version.** pkgm writes
+`/etc/systemd/system/<svc>@.service` with
+
+```ini
+ExecStart=/opt/pkgx/github.com/go-authn/bridge/v%i/bin/authn-bridge --config /etc/authn-bridge
+```
+
+so `authn-bridge@0.20.0.service` runs exactly 0.20.0. `systemctl status`
+shows which version is running, and nothing on the machine has to be believed
+about it: there is no `current` symlink, and no version is typed into a unit.
+State lives in versionless directories that systemd creates
+(`StateDirectory=`, `RuntimeDirectory=`, `ConfigurationDirectory=`).
+Nothing is written under the store, which stays immutable. The account is a
+static one, from `/etc/sysusers.d/pkgm-<svc>.conf` applied with
+`systemd-sysusers`.
+
+The rendered units were checked against the hand-written reference units of
+go-authn's three daemons with `systemd-analyze security` on Ubuntu 24.04
+(systemd 255). The scores are the same: authnd 1.4, authn-bridge 1.1,
+authn-revokd 1.1. `PrivateUsers=` is **derived**, not declared: it is off when
+the recipe declares a capability, because a capability does not reach the
+host's network from inside a user namespace (authnd's bind to port 389 is
+refused). The golden units are in [testdata/service](testdata/service).
+
+**`switch` hands over. It does not overlap.** The old instance stops, the new
+one starts, and the new one must stay active for five seconds. If it does not,
+it is stopped and the old one is started again, so the service ends up on the
+new version or on the old one, never on neither. Starting the new instance
+next to the old one first would only work for a daemon that can share its
+port, and none of these can. Measured: `authn-bridge@0.20.0` started beside
+0.19.4 dies with `bind: address already in use`.
+
+The store must be one that the service's sandbox can see. `ProtectHome=` and
+`PrivateTmp=` hide `/home`, `/root`, `/run/user` and `/tmp`, so a root
+install with the default `PKGX_DIR=/root/.pkgx` is refused, with a message
+that says why. Use `PKGX_DIR=/opt/pkgx`, for example. The program must be
+statically linked, because one unit serves every version and cannot carry
+one version's library path the way a stub does.
+
+**Without systemd** (a container, a `FROM scratch` image), every command that
+changes something refuses in one sentence that names the reason:
+
+```
+pkgm: pkgm service install needs systemd, and this system is not running it (/run/systemd/system does not exist): a container or FROM-scratch image has no service manager, so run the program directly, e.g. with `pkgm run`
+```
+
+`pkgm service list` still answers from the disk.
+
+### `uninstall` will not remove what a service runs
+
+```
+$ pkgm uninstall github.com/go-authn/bridge
+pkgm: refusing to uninstall: a service runs it, and nothing was removed:
+  authn-bridge@0.20.0.service (enabled, active) runs /opt/pkgx/github.com/go-authn/bridge/v0.20.0
+run "pkgm service remove authn-bridge" first
+```
+
+A refused uninstall changes nothing, stubs included, and it checks every
+argument before it removes anything. It works offline, like the rest of
+`uninstall`:
+
+- the units that belong to a package are found by the **first line** of each
+  template, `# pkgm-service project=<project> store=<store>`, read as fields
+  with the project compared whole. Nothing else in the file is read. A unit
+  names other paths further down, and searching the whole file is how
+  `uninstall jq` once removed oniguruma's program (see above);
+- an instance is **enabled** if its `*.wants/<svc>@<version>.service` link is
+  on disk, which needs no running systemd. It is **active** if `systemctl`
+  says so. If `systemctl` exists but cannot be asked, the uninstall is
+  refused: a failure is not read as "inactive".
+
+Only `uninstall` deletes version directories. `update` and `pin` install
+beside what is there. A test pins that, because the refusal guards
+`uninstall` alone.
 
 ### `~/.pkgx/config.hcl2`
 
