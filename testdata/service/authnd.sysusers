@@ -1,0 +1,8 @@
+# pkgm-service project=github.com/go-authn/authnd store=/opt/pkgx
+#
+# The account authnd@.service runs as, written by `pkgm service install`.
+# A static account, not DynamicUser=: its files must keep one owner across
+# versions, reinstalls and restores.
+#
+#Type Name ID GECOS Home Shell
+u authnd - "authnd LDAP directory and Kerberos KDC" /var/lib/authnd -

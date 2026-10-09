@@ -1,0 +1,8 @@
+# pkgm-service project=github.com/go-authn/bridge store=/opt/pkgx
+#
+# The account authn-bridge@.service runs as, written by `pkgm service install`.
+# A static account, not DynamicUser=: its files must keep one owner across
+# versions, reinstalls and restores.
+#
+#Type Name ID GECOS Home Shell
+u authn-bridge - "authn-bridge, an OpenID Connect provider in front of a SAML federation" /var/lib/authn-bridge -

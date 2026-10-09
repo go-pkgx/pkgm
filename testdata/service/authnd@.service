@@ -1,0 +1,60 @@
+# pkgm-service project=github.com/go-authn/authnd store=/opt/pkgx
+#
+# Written by `pkgm service install` from the service block of the
+# github.com/go-authn/authnd recipe. pkgm rewrites this file: put local changes
+# in a drop-in instead (systemctl edit authnd@.service).
+#
+# The instance is the VERSION: authnd@<version>.service runs
+# /opt/pkgx/github.com/go-authn/authnd/v<version>/bin/authnd.
+
+[Unit]
+Description=authnd LDAP directory and Kerberos KDC
+Documentation=https://github.com/go-authn/authnd
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/opt/pkgx/github.com/go-authn/authnd/v%i/bin/authnd --config /etc/authnd
+Restart=on-failure
+RestartSec=5s
+
+User=authnd
+Group=authnd
+UMask=0077
+StateDirectory=authnd
+StateDirectoryMode=0700
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+RestrictSUIDSGID=yes
+
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+DevicePolicy=closed
+ProtectProc=invisible
+RemoveIPC=yes
+PrivateIPC=yes
+
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

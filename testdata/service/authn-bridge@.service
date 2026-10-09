@@ -1,0 +1,67 @@
+# pkgm-service project=github.com/go-authn/bridge store=/opt/pkgx
+#
+# Written by `pkgm service install` from the service block of the
+# github.com/go-authn/bridge recipe. pkgm rewrites this file: put local changes
+# in a drop-in instead (systemctl edit authn-bridge@.service).
+#
+# The instance is the VERSION: authn-bridge@<version>.service runs
+# /opt/pkgx/github.com/go-authn/bridge/v<version>/bin/authn-bridge.
+
+[Unit]
+Description=authn-bridge, an OpenID Connect provider in front of a SAML federation
+Documentation=https://github.com/go-authn/bridge/blob/main/docs/install.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/opt/pkgx/github.com/go-authn/bridge/v%i/bin/authn-bridge --config /etc/authn-bridge
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+User=authn-bridge
+Group=authn-bridge
+UMask=0077
+StateDirectory=authn-bridge
+StateDirectoryMode=0700
+RuntimeDirectory=authn-bridge
+RuntimeDirectoryMode=0700
+ConfigurationDirectory=authn-bridge
+ConfigurationDirectoryMode=0750
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+PrivateUsers=yes
+
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+DevicePolicy=closed
+ProtectProc=invisible
+ProcSubset=pid
+RemoveIPC=yes
+PrivateIPC=yes
+
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target
