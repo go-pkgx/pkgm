@@ -2,13 +2,13 @@ module github.com/go-pkgx/pkgm
 
 go 1.27.1
 
-require github.com/go-pkgx/bottle v0.44.0
+require github.com/go-pkgx/bottle v0.46.0
 
 require (
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v17 v17.0.1 // indirect
-	github.com/go-attest/sign v0.2.0 // indirect
+	github.com/go-attest/sign v0.3.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.25.0 // indirect
 	github.com/klauspost/compress v1.20.1 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
