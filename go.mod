@@ -1,6 +1,6 @@
 module github.com/go-pkgx/pkgm
 
-go 1.27.1
+go 1.27.2
 
 require github.com/go-pkgx/bottle v0.47.0
 
