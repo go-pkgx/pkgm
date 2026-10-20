@@ -15,6 +15,10 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write      # creating the release and uploading its files
+      id-token: write      # the attestation's Sigstore certificate
+      attestations: write  # recording it
     steps:
       # ⛔ THE TAG MUST BE REACHABLE, and the default checkout is shallow:
       # it fetches ONE commit of the ref it was given. `git checkout "$tag"`
@@ -146,6 +150,30 @@ jobs:
             bad=1
           fi
           exit "$bad"
+
+      # ⛔ WITHOUT THIS, NOTHING CONNECTS A PUBLISHED BINARY TO ITS BUILD.
+      # SHA256SUMS is a checksum of itself: it says the binaries match a
+      # manifest published beside them, and whoever replaced the binaries
+      # would replace the manifest. A provenance attestation is the half
+      # that cannot be forged from the release page — GitHub signs, through
+      # Sigstore, a statement that THIS workflow built THAT file from THAT
+      # commit, and `gh attestation verify -R go-pkgx/pkgm <file>` checks it.
+      #
+      # Measured 2026-10-20 on go-pkgx/pkgx v0.23.1, with go-fleettools'
+      # relverify: twelve files, every checksum right, and every attestation
+      # lookup `HTTP 404: Not Found`. The same was true here, and of
+      # go-pkgx/bk and go-pkgx/mirror — one organisation publishing binaries
+      # that verify as far as a manifest can take them and no further.
+      #
+      # It runs AFTER the stamp guard and BEFORE publishing: nothing
+      # mis-stamped is ever attested, and nothing unattested is ever
+      # published.
+      - name: Attest the binaries and the manifest
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            ${{ runner.temp }}/dist/pkgm-*
+            ${{ runner.temp }}/dist/SHA256SUMS
 
       - name: Publish GitHub Release
         env:
