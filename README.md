@@ -44,6 +44,21 @@ release `SHA256SUMS`, and drops `pkgm` on your `PATH` (`$HOME/.local/bin`, or
 `%LOCALAPPDATA%\Programs\go-pkgx` on Windows). Set `PKGM_INSTALL` to override
 the directory on Unix.
 
+⛔ **`SHA256SUMS` is a checksum of itself.** It says the binaries match a
+manifest published beside them, and whoever replaced the binaries would
+replace the manifest. The half that cannot be forged from the release page is
+GitHub's **provenance attestation** — signed through Sigstore, saying that
+this repository's release workflow built that file from that commit:
+
+```sh
+gh attestation verify -R go-pkgx/pkgm pkgm-linux-amd64
+```
+
+Every file of a release published after 2026-10-20 carries one; earlier ones
+carry none, and `gh attestation verify` answers `HTTP 404` for those rather
+than failing closed, so a 404 on an older binary means *unattested*, not
+*tampered with*.
+
 The version is named on purpose: this line copied today and the same line
 copied in six months install the same bytes, and a bad release does not reach
 everyone who happens to install that hour. To track releases instead, say so —
