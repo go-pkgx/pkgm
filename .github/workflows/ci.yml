@@ -132,14 +132,36 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27.3'
+      # ⛔ `qemu-user-static` is a VIRTUAL package on Ubuntu 26.04, which
+      # `ubuntu-latest` became on 2026-10-19, and apt refuses to choose between its
+      # two providers:
+      #
+      #   E: Package 'qemu-user-static' has no installation candidate
+      #
+      # ⚠ Installing a provider is NOT the fix: `qemu-user-binfmt` registers binfmt
+      # handlers, it does not ship the `qemu-<arch>-static` binaries this lane
+      # invokes. `qemu-user` ships the dynamic `qemu-<arch>`, which is all that
+      # `go test -exec` needs, so both are installed and BOTH NAMES are accepted
+      # below. go-tex/engine#645 has the full account.
       - name: qemu-user
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-user-static
+          sudo apt-get install -y -qq qemu-user qemu-user-binfmt
           # Named, not assumed: a missing emulator must report itself as a
           # missing tool rather than as a failure on that architecture.
-          command -v ${{ matrix.qemu }} || {
-            echo "::error::${{ matrix.qemu }} is not in this image" >&2; exit 1; }
+          base="${{ matrix.qemu }}"
+          q=""
+          for cand in "$base" "${base%-static}"; do
+            command -v "$cand" >/dev/null 2>&1 && q="$cand" && break
+          done
+          if [ -z "$q" ]; then
+            echo "::error::no qemu user emulator for ${{ matrix.goarch }} (looked for $base and ${base%-static})" >&2
+            exit 1
+          fi
+          # The resolved name crosses to the `go test` step, which prints it:
+          # without that line, "ran under emulation" and "skipped" are
+          # indistinguishable from a green tick.
+          echo "QEMU_EXEC=$q" >> "$GITHUB_ENV"
       - name: go test
         env:
           CGO_ENABLED: "0"
@@ -147,7 +169,12 @@ jobs:
           GOOS: linux
         # -count=1 so a cached PASS from the host architecture cannot stand in
         # for a run that never happened under emulation.
-        run: go test -count=1 -exec ${{ matrix.qemu }} ./...
+        run: |
+          # Printed on purpose: without it, "ran under emulation" and "skipped"
+          # are indistinguishable from a green tick. The install step resolved
+          # the name and failed the lane if neither binary was there.
+          echo "running ${{ matrix.goarch }} under $QEMU_EXEC"
+          go test -count=1 -exec "$QEMU_EXEC" ./...
 
   freebsd:
     name: test (FreeBSD, a kernel that is not Linux)
