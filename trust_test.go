@@ -231,6 +231,45 @@ func TestGroupWritableIsRefusedToo(t *testing.T) {
 	}
 }
 
+// ⛔ TestAStickyDirectoryIsNotAnExposure. /tmp is mode 1777, and leaving this
+// out turned every lane of this repository's CI red at once while passing
+// locally — macOS t.TempDir() lands under /var/folders/<...>, which is 0700
+// per user, so the ancestry walk never reached a world-writable directory,
+// while on Linux it reaches /tmp on the second step.
+//
+// The sticky bit means only an entry's own owner may rename or delete it, so
+// a store path already inside such a directory cannot be swapped. That is the
+// whole reason /tmp is allowed to be world-writable.
+func TestAStickyDirectoryIsNotAnExposure(t *testing.T) {
+	root := t.TempDir()
+	sticky := filepath.Join(root, "tmplike")
+	store := filepath.Join(sticky, "store")
+	prefix := filepath.Join(root, "usr", "local")
+	if err := os.MkdirAll(filepath.Join(prefix, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(store, "go.dev", "v1.27.3"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(sticky, 0o777|os.ModeSticky); err != nil {
+		t.Fatal(err)
+	}
+	closure := resolved(t, "go.dev", "1.27.3")
+	if err := trustShimTargets(prefix, store, closure); err != nil {
+		t.Errorf("a store under a sticky 1777 directory was refused: %v", err)
+	}
+
+	// And the bit has no such meaning WITHOUT it: the same tree at 0777 is
+	// still an exposure, which is what keeps this from being a blanket
+	// exemption for anything world-writable.
+	if err := os.Chmod(sticky, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := trustShimTargets(prefix, store, closure); err == nil {
+		t.Error("the same directory at a plain 0777 was accepted")
+	}
+}
+
 // TestAnAbsentPathIsNotUntrusted: a lib dir listed for a package that has
 // none, or a store about to be created, is simply not there. Refusing on
 // absence would make a first install impossible.

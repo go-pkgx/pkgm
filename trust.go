@@ -185,6 +185,22 @@ func trustOne(path string, refUID uint32, ownerRef string) error {
 				"Use a store that uid %d controls: PKGX_DIR=%s",
 			ownerRef, path, uid, ownerRef, refUID, uid, refUID, suggest)
 	}
+	// ⛔ A STICKY DIRECTORY IS NOT AN EXPOSURE, and leaving that out turned
+	// every lane of this repository's CI red at once. /tmp is mode 1777: the
+	// sticky bit means only an entry's own owner (or root) may rename or
+	// delete it, so nobody can swap out a store path that is already there.
+	// That is the whole reason /tmp is allowed to be world-writable.
+	//
+	// It did not show locally because macOS t.TempDir() lands under
+	// /var/folders/<...>, which is 0700 per user — so the ancestry walk never
+	// reached a world-writable directory at all. On Linux it reaches /tmp on
+	// the second step.
+	//
+	// Only for DIRECTORIES: the bit has no such meaning on a regular file,
+	// and a world-writable file is replaceable by anyone, sticky or not.
+	if mode.IsDir() && mode&os.ModeSticky != 0 {
+		return nil
+	}
 	if mode.IsDir() || mode.IsRegular() {
 		if bad := mode.Perm() & 0o022; bad != 0 {
 			who := "the group"
