@@ -89,7 +89,9 @@ pkgm run|x        <pkg> [-- args...]    run a pkg (works FROM scratch)
 pkgm service      install|switch|rollback|list|remove   run a daemon under systemd, by version
 
 flags: -h/--help  -v/--version  -p/--pin  -P/--prefix DIR  -s/--from-scratch
-env:   PKGX_DIR     bottle store (default: ~/.pkgx)
+env:   PKGX_DIR     bottle store (default: ~/.pkgx, or <prefix>/pkgs when the
+                    prefix is outside your home — see "A shim is a privilege
+                    boundary")
        PKGX_DIST    bottle source (default: oci://ghcr.io/go-pkgx/packages, signed)
        PKGX_VERIFY  verify bottle signatures, fail-closed (default: on)
        PKGM_PREFIX  default install prefix (ideal for FROM scratch)
@@ -213,9 +215,58 @@ port, and none of these can. Measured: `authn-bridge@0.20.0` started beside
 The store must be one that the service's sandbox can see. `ProtectHome=` and
 `PrivateTmp=` hide `/home`, `/root`, `/run/user` and `/tmp`, so a root
 install with the default `PKGX_DIR=/root/.pkgx` is refused, with a message
-that says why. Use `PKGX_DIR=/opt/pkgx`, for example. The program must be
+that says why. Use `PKGX_DIR=/opt/pkgx`, for example. It must also be a store
+nobody else can write — the unit's `ExecStart` is run by root at every boot,
+so the same ownership rule as a shim applies, and `/opt/pkgx` owned by an
+ordinary user passes the sandbox check and fails that one. The program must be
 statically linked, because one unit serves every version and cannot carry
 one version's library path the way a stub does.
+
+## A shim is a privilege boundary
+
+```console
+$ sudo pkgm install go.dev@1.27.3
+pkgm: refusing to record store paths under /usr/local/bin:
+  /Users/you/.pkgx is owned by uid 501, and /usr/local/bin belongs to uid 0 —
+  uid 501 could replace what gets run with root's privileges.
+  Use a store that uid 0 controls: PKGX_DIR=/usr/local/pkgs
+```
+
+A shim is a small script in `<prefix>/bin` holding absolute paths: the binary
+it `exec`s and the `LD_LIBRARY_PATH` it exports. It runs with the privileges
+of whoever invokes it, so anyone who can write one of those paths can run
+code as that person.
+
+`PKGX_DIR` defaults to `~/.pkgx`, and **macOS `sudo` keeps the caller's
+`HOME`** — so `sudo pkgm install go.dev` used to write a root-owned
+`/usr/local/bin/go` pointing into an unprivileged user's home directory, and
+anything root ran through `go` after that executed a user-writable binary.
+That was [#73](https://github.com/go-pkgx/pkgm/issues/73).
+
+Two things changed, because either alone leaves a hole:
+
+- **The default follows the prefix.** With `PKGX_DIR` unset, the store is
+  `<prefix>/pkgs` whenever the prefix is not inside the home directory of the
+  user pkgm is running as. A plain `pkgm install` into `~/.local` goes on
+  using `~/.pkgx`, so nothing moves for the ordinary case, and `PKGX_DIR`
+  still wins when you set it.
+- **The invariant is checked anyway.** `install`, `shim`, `update` and
+  `service install` refuse when the store, any package prefix in it, any
+  `LD_LIBRARY_PATH` directory, **or any directory above one of those** is
+  owned by someone other than root or the prefix's owner, or is writable by
+  group or others. A default is not a boundary: `PKGM_PREFIX`, `--prefix` and
+  `PKGX_DIR` combine into configurations nobody enumerated.
+
+Root is always allowed, because root can replace the shim itself. The
+prefix's own owner is allowed too, because on a stock macOS with Homebrew
+`/usr/local/bin` belongs to the admin user rather than to root, and refusing
+there would be a false positive on the commonest system prefix there is.
+
+The reference pkgm does not have this hole, and not by checking for it: it
+runs the download as the pre-sudo user and then *mirrors* the result into
+`<prefix>/pkgs`, so the shim's target is inside the prefix by construction.
+pkgm shims straight at the store instead, which is why the store's location
+had to become the prefix's business.
 
 **Without systemd** (a container, a `FROM scratch` image), every command that
 changes something refuses in one sentence that names the reason:
