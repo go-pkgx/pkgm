@@ -505,16 +505,18 @@ func serviceConstraint(arg string) (project, constraint string) {
 	return project, constraint
 }
 
-// ensureInstalled resolves and installs the closure, returning the version.
-func ensureInstalled(project, constraint, store string) (string, error) {
+// ensureInstalled resolves and installs the closure, returning the version and
+// the closure itself — the caller needs it to judge who owns the paths the
+// unit is about to record (see trustStore, and go-pkgx/pkgm#73).
+func ensureInstalled(project, constraint, store string) (string, []bottle.Resolved, error) {
 	closure, err := bottle.ResolveClosure(map[string]string{project: constraint})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	for _, r := range closure {
 		fresh, err := bottle.Install(r, store)
 		if err != nil {
-			return "", fmt.Errorf("%s: %w", r.Project, err)
+			return "", nil, fmt.Errorf("%s: %w", r.Project, err)
 		}
 		state := "cached"
 		if fresh {
@@ -523,7 +525,7 @@ func ensureInstalled(project, constraint, store string) (string, error) {
 		fmt.Printf("  %-9s %s v%s\n", state, r.Project, r.Version.Raw)
 	}
 	prefix := bottle.PrefixOf(project, closure, store)
-	return strings.TrimPrefix(filepath.Base(prefix), "v"), nil
+	return strings.TrimPrefix(filepath.Base(prefix), "v"), closure, nil
 }
 
 // prepare fetches the service block, installs the version and checks that the
@@ -540,8 +542,18 @@ func prepare(project, constraint, store string) (*bottle.Service, string, error)
 	if s == nil {
 		return nil, "", fmt.Errorf("%s declares no service: its recipe has no `service` block", project)
 	}
-	v, err := ensureInstalled(project, constraint, store)
+	v, closure, err := ensureInstalled(project, constraint, store)
 	if err != nil {
+		return nil, "", err
+	}
+	// ⛔ BEFORE A ROOT UNIT RECORDS THESE PATHS. The unit's ExecStart is
+	// <store>/<project>/v%i/bin/<command>, run by root at every boot, so a
+	// store anyone else can write is go-pkgx/pkgm#73 with a worse blast
+	// radius than the shim it was reported against. checkStore above refuses
+	// a store under /home, /root, /run/user or /tmp because the sandbox hides
+	// those — a different question from who OWNS it, and /opt/pkgx owned by
+	// an ordinary user passes that check and fails this one.
+	if err := trustStore(unitDir, store, closure); err != nil {
 		return nil, "", err
 	}
 	if !versionRE.MatchString(v) {

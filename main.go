@@ -252,7 +252,7 @@ func cmdInstall(args []string, prefix string, f flags) error {
 		p, c := parseReq(a, f.pin)
 		roots[p] = c
 	}
-	dir := bottle.Dir()
+	dir := storeFor(prefix)
 	var closure []bottle.Resolved
 	if f.scratch {
 		// Materialize the complete FROM-scratch closure (declared deps + the
@@ -295,6 +295,9 @@ func cmdInstall(args []string, prefix string, f flags) error {
 			}
 		}
 	}
+	if err := trustShimTargets(prefix, dir, closure); err != nil {
+		return err
+	}
 	n, err := bottle.StubBins(closure, dir, prefix)
 	if err != nil {
 		return err
@@ -313,7 +316,7 @@ func cmdShim(args []string, prefix string) error {
 		p, c := parseReq(a, false)
 		roots[p] = c
 	}
-	dir := bottle.Dir()
+	dir := storeFor(prefix)
 	closure, err := bottle.ResolveClosure(roots)
 	if err != nil {
 		return err
@@ -322,6 +325,9 @@ func cmdShim(args []string, prefix string) error {
 		if _, err := bottle.Install(r, dir); err != nil {
 			return fmt.Errorf("%s: %w", r.Project, err)
 		}
+	}
+	if err := trustShimTargets(prefix, dir, closure); err != nil {
+		return err
 	}
 	n, err := bottle.StubBins(closure, dir, prefix)
 	if err != nil {
@@ -352,7 +358,7 @@ func cmdUninstall(args []string, prefix string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("no packages specified")
 	}
-	dir := bottle.Dir()
+	dir := storeFor(prefix)
 	projects := make([]string, 0, len(args))
 	for _, a := range args {
 		project, _ := parseReq(a, false)
@@ -474,7 +480,7 @@ func readHead(path string, max int) ([]byte, error) {
 }
 
 func cmdList(prefix string) error {
-	for _, p := range installedProjects(bottle.Dir()) {
+	for _, p := range installedProjects(storeFor(prefix)) {
 		fmt.Println(p)
 	}
 	return nil
@@ -494,7 +500,7 @@ func cmdList(prefix string) error {
 // is now said out loud, and a run that could not ask about something exits
 // non-zero — because "I don't know" is not "nothing to do".
 func cmdOutdated(w io.Writer, prefix string) error {
-	dir := bottle.Dir()
+	dir := storeFor(prefix)
 	lines := installedProjects(dir)
 	var checked, behind int
 	var unchecked []string
@@ -536,7 +542,7 @@ func cmdOutdated(w io.Writer, prefix string) error {
 }
 
 func cmdUpdate(prefix string) error {
-	dir := bottle.Dir()
+	dir := storeFor(prefix)
 	roots := map[string]string{}
 	for _, line := range installedProjects(dir) {
 		if fields := strings.Fields(line); len(fields) == 2 {
