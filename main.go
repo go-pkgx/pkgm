@@ -61,6 +61,13 @@ flags:
                     (repeatable; blank lines ignored, # starts a comment). A long
                     install belongs in a file you can commit next to what it
                     builds, review and diff — not retyped on a command line.
+      --lock FILE   install EXACTLY what a "bk lock" file pins — every pin, not
+                    just its roots — with no version resolution at all. This is
+                    how an install is made to be the SAME install later, which
+                    naming versions is not: the same pantry commit resolved tcl
+                    to 9.0.4 and then to 9.1.0 four hours apart. The lock must
+                    pin "published" versions and name this platform, and it
+                    cannot be combined with named packages, -f, -p or -s.
 
 env:
   PKGX_DIR          bottle store (default: ~/.pkgx)
@@ -81,6 +88,7 @@ type flags struct {
 	help, showVersion, pin, scratch bool
 	prefix                          string
 	files                           []string // -f/--file: package lists to read
+	lock                            string   // --lock: install exactly what a `bk lock` file pins
 }
 
 // parseArgs splits flags from positional arguments (getopt-style, matching the
@@ -122,6 +130,13 @@ func parseArgs(argv []string) ([]string, flags) {
 			}
 		case strings.HasPrefix(a, "--file="):
 			f.files = append(f.files, strings.TrimPrefix(a, "--file="))
+		case a == "--lock":
+			if i+1 < len(argv) {
+				i++
+				f.lock = argv[i]
+			}
+		case strings.HasPrefix(a, "--lock="):
+			f.lock = strings.TrimPrefix(a, "--lock=")
 		default:
 			pos = append(pos, a)
 		}
@@ -239,6 +254,9 @@ func parseReq(s string, pin bool) (project, constraint string) {
 }
 
 func cmdInstall(args []string, prefix string, f flags) error {
+	if f.lock != "" {
+		return cmdInstallLock(args, prefix, f)
+	}
 	fromFiles, err := readPackageLists(f.files)
 	if err != nil {
 		return err
