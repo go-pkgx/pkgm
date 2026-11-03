@@ -89,6 +89,8 @@ pkgm run|x        <pkg> [-- args...]    run a pkg (works FROM scratch)
 pkgm service      install|switch|rollback|list|remove   run a daemon under systemd, by version
 
 flags: -h/--help  -v/--version  -p/--pin  -P/--prefix DIR  -s/--from-scratch
+       -f/--file FILE   read packages from a file, one <pkg>[@version] per line
+       --lock FILE      install exactly what a `bk lock` file pins
 env:   PKGX_DIR     bottle store (default: ~/.pkgx, or <prefix>/pkgs when the
                     prefix is outside your home — see "A shim is a privilege
                     boundary")
@@ -105,6 +107,41 @@ set `PKGX_DIST=https://dist.pkgx.dev` together with `PKGX_VERIFY=0`.
 The `install`/`uninstall`/`shim`/`list`/`outdated`/`update`/`pin` command
 surface and the `~/.local` vs `/usr/local` prefix logic mirror the reference
 `pkgm`, so it is a drop-in replacement.
+
+### `install --lock`: the same install later, not a similar one
+
+```console
+$ pkgm install --lock seed.lock.hcl
+  installed acme.org/tool v1.0.0
+  installed zlib.net v1.3.2
+linked 2 binaries → /usr/local/bin
+```
+
+Naming versions does not pin them. The same pantry commit resolved tcl to
+**9.0.4 and then to 9.1.0 four hours apart** — nothing in the request changed,
+only the day. A lock is the file that answers "which versions, exactly", the
+way Nix's `flake.lock`, Guix's `channels.scm` and Spack's concretized specs do.
+
+`bk lock` has written these for a while, and `bk factory --lock` **builds**
+them. Until now nothing could **install** one, which made the lock a record of
+a build rather than a way to repeat it.
+
+⛔ **Every pin is installed, not just the roots, and nothing is resolved.**
+The roots are the only part of a lock a resolver could reconstruct — and
+reconstructing them is exactly what makes two installs of the same lock
+differ.
+
+It refuses rather than guesses, in three cases:
+
+| refused | why |
+|---|---|
+| a lock pinning `recipes` versions | those are the newest the recipes can **build**, not the newest **published** — measured upstream at 2 of 5 pins for curl.se on linux/aarch64. Write it with `bk lock -runnable`. A lock with no `pinned` field is a `recipes` lock: that is what every file written before the field existed holds |
+| a lock taken on another platform | the platform **changes the answer**; where versions happen to coincide it would otherwise succeed and give a set nobody locked |
+| `--lock` beside packages, `-f`, `-p` or `-s` | a lock is the whole set, not a floor to add to. `-s` in particular adds the implicit system libraries, which the lock does not pin — so the result would not be the locked set while still reading as a locked install |
+
+The last row is the one that costs something: making a `FROM scratch` image
+reproducible needs those implicit libraries pinned **in the lock**, which is a
+change to `bk lock` rather than a flag combination here.
 
 ### `outdated` does not confuse "nothing to do" with "I could not ask"
 
