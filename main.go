@@ -167,7 +167,12 @@ func run(argv []string) int {
 		return 0
 	}
 	if f.showVersion {
-		fmt.Println("pkgm " + version)
+		// ⛔ THE BINARY SAYS ITS OWN NAME. After the rename, `pkgm` is not
+		// merely the wrong name — upstream's installer is a different program
+		// that can now sit on the same PATH, which is the point of renaming
+		// ours. Measured on this machine: `zpkgm --version` answered
+		// `pkgm dev`.
+		fmt.Println("zpkgm " + version)
 		return 0
 	}
 	if len(pos) == 0 {
