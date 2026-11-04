@@ -1,8 +1,8 @@
-module github.com/go-pkgx/pkgm
+module github.com/go-zpkg/zpkgm
 
 go 1.27.3
 
-require github.com/go-pkgx/bottle v0.63.0
+require github.com/go-zpkg/bottle v0.67.0
 
 require (
 	github.com/agext/levenshtein v1.2.1 // indirect

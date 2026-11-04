@@ -1,11 +1,11 @@
 // Command pkgm is a dependency-free, pure-Go installer for pkgx bottles.
 //
 // It resolves a package's runtime dependency closure from the pkgx pantry,
-// downloads the bottles — from the signed OCI registry oci://ghcr.io/go-pkgx/packages
+// downloads the bottles — from the signed OCI registry oci://ghcr.io/go-zpkg/packages
 // by default, verifying each bottle's signature (fail-closed) — and installs
 // them, with no runtime dependencies of its own (a single CGO_ENABLED=0 binary
-// that runs on a `FROM scratch` image). Point PKGX_DIST at the unsigned upstream
-// (https://dist.pkgx.dev) with PKGX_VERIFY=0 for the full pantry. It mirrors the
+// that runs on a `FROM scratch` image). Point ZPKG_DIST at the unsigned upstream
+// (https://dist.pkgx.dev) with ZPKG_VERIFY=0 for the full pantry. It mirrors the
 // reference pkgm CLI so it is a drop-in replacement, and adds a shell-free `run`
 // for scratch images.
 package main
@@ -20,7 +20,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-pkgx/bottle"
+	"github.com/go-zpkg/bottle"
 )
 
 // osReadFile is os.ReadFile, a seam so the package-list reader's error branch is
@@ -70,17 +70,17 @@ flags:
                     cannot be combined with named packages, -f, -p or -s.
 
 env:
-  PKGX_DIR          bottle store (default: ~/.pkgx)
-  PKGX_DIST         bottle source (default: oci://ghcr.io/go-pkgx/packages, the
+  ZPKG_DIR          bottle store (default: ~/.pkgx)
+  ZPKG_DIST         bottle source (default: oci://ghcr.io/go-zpkg/packages, the
                     signed registry; set https://dist.pkgx.dev for the full
-                    unsigned upstream pantry — pair with PKGX_VERIFY=0)
-  PKGX_VERIFY       verify bottle signatures, fail-closed (default: on;
+                    unsigned upstream pantry — pair with ZPKG_VERIFY=0)
+  ZPKG_VERIFY       verify bottle signatures, fail-closed (default: on;
                     set 0/false/no/off to disable)
   PKGM_PREFIX       default install prefix (ideal for FROM scratch: be root,
                     set PKGM_PREFIX=/usr, no sudo needed)
 
-  ~/.pkgx/config.hcl2 sets defaults for the PKGX_* / OCI_* variables above
-  (HCL2 attributes, e.g. PKGX_DIST = "oci://ghcr.io/go-pkgx/packages"). A real
+  ~/.pkgx/config.hcl2 sets defaults for the ZPKG_* / OCI_* variables above
+  (HCL2 attributes, e.g. ZPKG_DIST = "oci://ghcr.io/go-zpkg/packages"). A real
   environment variable always overrides a value set in the file.
 `
 
@@ -551,7 +551,7 @@ func cmdOutdated(w io.Writer, prefix string) error {
 	fmt.Fprintf(w, "\n%d installed, %d checked, %d behind, %d could not be asked\n",
 		len(lines), checked, behind, len(unchecked))
 	if len(lines) == 0 {
-		fmt.Fprintf(w, "no packages installed in %s — is that the right PKGX_DIR?\n", dir)
+		fmt.Fprintf(w, "no packages installed in %s — is that the right ZPKG_DIR?\n", dir)
 	}
 	if len(unchecked) > 0 {
 		return fmt.Errorf("%d of %d installed packages could not be checked", len(unchecked), len(lines))

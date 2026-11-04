@@ -8,19 +8,19 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/go-pkgx/bottle"
+	"github.com/go-zpkg/bottle"
 )
 
 // ⛔ A SHIM IS A PRIVILEGE BOUNDARY, AND NOTHING HERE TREATED IT AS ONE.
 //
-// Measured on this machine, 2026-10-31 (go-pkgx/pkgm#73). `sudo pkgm install
+// Measured on this machine, 2026-10-31 (go-zpkg/pkgm#73). `sudo pkgm install
 // go.dev@1.27.3` wrote /usr/local/bin/go — root-owned, on root's PATH —
 // containing:
 //
 //	export LD_LIBRARY_PATH="/Users/<user>/.pkgx/go.dev/v1.27.3/lib:…"
 //	exec "/Users/<user>/.pkgx/go.dev/v1.27.3/bin/go" "$@"
 //
-// PKGX_DIR defaults to ~/.pkgx and macOS sudo keeps the caller's HOME, so
+// ZPKG_DIR defaults to ~/.pkgx and macOS sudo keeps the caller's HOME, so
 // root's store resolved to an unprivileged user's home directory. Anything
 // root ran through `go` after that executed a user-writable binary and loaded
 // libraries from user-writable directories. /usr/local/pkgs was left empty.
@@ -37,12 +37,12 @@ import (
 //   - storeFor makes the default store follow the prefix, so the mistake is
 //     hard to make;
 //   - trustShimTargets refuses it whatever the environment, so the mistake is
-//     impossible to make. PKGM_PREFIX, --prefix and PKGX_DIR can be combined
+//     impossible to make. PKGM_PREFIX, --prefix and ZPKG_DIR can be combined
 //     into configurations nobody enumerated, and a default is not a boundary.
 
 // storeFor is the bottle store an install into this prefix should use.
 //
-// PKGX_DIR wins: it is explicit, it is what the error message below suggests,
+// ZPKG_DIR wins: it is explicit, it is what the error message below suggests,
 // and a `FROM scratch` image sets it deliberately. Otherwise the store lives
 // beside the binaries it backs — <prefix>/pkgs — whenever the prefix is not
 // inside the home directory of the user we are running as.
@@ -53,7 +53,7 @@ import (
 // wrong answer no matter what euid says. A plain `pkgm install` into ~/.local
 // keeps using ~/.pkgx, so nothing changes for the ordinary case.
 func storeFor(prefix string) string {
-	if bottle.Env("PKGX_DIR") != "" {
+	if bottle.Env("ZPKG_DIR") != "" {
 		return bottle.Dir()
 	}
 	home, err := os.UserHomeDir()
@@ -182,7 +182,7 @@ func trustOne(path string, refUID uint32, ownerRef string) error {
 		return fmt.Errorf(
 			"refusing to record store paths under %s: %s is owned by uid %d, and %s belongs to uid %d — "+
 				"uid %d could replace what gets run with root's privileges. "+
-				"Use a store that uid %d controls: PKGX_DIR=%s",
+				"Use a store that uid %d controls: ZPKG_DIR=%s",
 			ownerRef, path, uid, ownerRef, refUID, uid, refUID, suggest)
 	}
 	// ⛔ A STICKY DIRECTORY IS NOT AN EXPOSURE, and leaving that out turned
@@ -210,7 +210,7 @@ func trustOne(path string, refUID uint32, ownerRef string) error {
 			return fmt.Errorf(
 				"refusing to record store paths under %s: %s is writable by %s (mode %04o) — "+
 					"whoever can write it could replace what gets run. "+
-					"Either tighten that path's permissions or use PKGX_DIR=%s",
+					"Either tighten that path's permissions or use ZPKG_DIR=%s",
 				ownerRef, path, who, mode.Perm(), suggest)
 		}
 	}

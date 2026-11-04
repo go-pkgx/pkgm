@@ -110,7 +110,7 @@ exists at build time but is not published. Two complementary asks:
    implicit system libraries a bottle links, so `FROM scratch` consumers are
    first-class.
 
-`go-pkgx/pkgm` is a working proof of concept: a single pure-Go, `CGO_ENABLED=0`
+`go-zpkg/pkgm` is a working proof of concept: a single pure-Go, `CGO_ENABLED=0`
 binary that resolves the closure from `DT_NEEDED` and runs real packages
 (bash, curl, node, python, perl, …) on a `FROM scratch` image with zero system
-dependencies. See <https://github.com/go-pkgx/pkgm>.
+dependencies. See <https://github.com/go-zpkg/zpkgm>.

@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-pkgx/bottle"
+	"github.com/go-zpkg/bottle"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden units in testdata/service")
@@ -195,7 +195,7 @@ func withBridge(t *testing.T) string {
 		return nil, nil
 	}
 	store := t.TempDir()
-	t.Setenv("PKGX_DIR", store)
+	t.Setenv("ZPKG_DIR", store)
 	return store
 }
 
@@ -489,7 +489,7 @@ func enable(t *testing.T, unit string) {
 func installedStore(t *testing.T, projects ...string) string {
 	t.Helper()
 	store := t.TempDir()
-	t.Setenv("PKGX_DIR", store)
+	t.Setenv("ZPKG_DIR", store)
 	for _, p := range projects {
 		if err := os.MkdirAll(filepath.Join(store, p, "v1.0.0", "bin"), 0o755); err != nil {
 			t.Fatal(err)
@@ -619,7 +619,7 @@ func TestOnlyUninstallRemovesFromTheStore(t *testing.T) {
 		"acme.org/tool": {versions: []string{"1.0.0", "2.0.0"}, yaml: "provides:\n  - bin/tool\n", files: map[string]string{"bin/tool": "#!x\n"}},
 	})()
 	store := t.TempDir()
-	t.Setenv("PKGX_DIR", store)
+	t.Setenv("ZPKG_DIR", store)
 	t.Setenv("PKGM_PREFIX", t.TempDir())
 	t.Setenv("PATH", "")
 	if err := dispatch("pin", []string{"acme.org/tool@1.0.0"}, flags{}); err != nil {

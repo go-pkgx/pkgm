@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-pkgx/bottle"
+	"github.com/go-zpkg/bottle"
 )
 
 // hostPlatform is what a lock taken here must name.
@@ -225,7 +225,7 @@ func TestInstallFromALockInstallsThePinnedVersions(t *testing.T) {
 	home := t.TempDir()
 	dir := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("PKGX_DIR", dir)
+	t.Setenv("ZPKG_DIR", dir)
 	t.Setenv("PATH", filepath.Join(home, ".local", "bin"))
 	prefix := filepath.Join(home, ".local")
 	t.Setenv("PKGM_PREFIX", prefix)
@@ -269,7 +269,7 @@ func TestAPinThatCannotBeInstalledNamesTheProject(t *testing.T) {
 			files:    map[string]string{"bin/tool": "#!x\n"},
 		},
 	})()
-	t.Setenv("PKGX_DIR", t.TempDir())
+	t.Setenv("ZPKG_DIR", t.TempDir())
 
 	err := installLocked(io.Discard, []bottle.Resolved{
 		{Project: "absent.example/nothing", Version: bottle.ParseVer("1.0.0")},

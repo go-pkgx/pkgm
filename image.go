@@ -36,8 +36,8 @@ import (
 func cmdImage(args []string) error {
 	fs := flag.NewFlagSet("image", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	overlay := fs.String("overlay", "", "bake PKGX_PANTRY_OVERLAY=<url> into the image (corrected recipes consulted before the upstream pantry)")
-	glibc := fs.String("glibc", "", "bake PKGX_GLIBC=<version> — the image installs and runs against exactly that glibc, e.g. -glibc 2.28 (default: whatever the host kernel supports)")
+	overlay := fs.String("overlay", "", "bake ZPKG_PANTRY_OVERLAY=<url> into the image (corrected recipes consulted before the upstream pantry)")
+	glibc := fs.String("glibc", "", "bake ZPKG_GLIBC=<version> — the image installs and runs against exactly that glibc, e.g. -glibc 2.28 (default: whatever the host kernel supports)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -54,10 +54,10 @@ func writeImage(w io.Writer, args []string, overlay, glibc string) error {
 	// where there is no /bin/sh. json.Marshal escapes the args safely.
 	var b strings.Builder
 	fmt.Fprintln(&b, "FROM scratch")
-	fmt.Fprintln(&b, "ENV PKGX_DIR=/pkgx")
+	fmt.Fprintln(&b, "ENV ZPKG_DIR=/pkgx")
 	fmt.Fprintln(&b, "ENV HOME=/root")
 	if overlay != "" {
-		fmt.Fprintln(&b, "ENV PKGX_PANTRY_OVERLAY="+overlay)
+		fmt.Fprintln(&b, "ENV ZPKG_PANTRY_OVERLAY="+overlay)
 	}
 	// A pinned glibc is baked as the environment variable bottle resolves the
 	// implicit C library with, so it holds for BOTH the RUN that installs the
@@ -65,7 +65,7 @@ func writeImage(w io.Writer, args []string, overlay, glibc string) error {
 	// once, deterministic for a known cluster kernel. (Passing an extra
 	// gnu.org/glibc@=<ver> install root would only pin the install.)
 	if glibc != "" {
-		fmt.Fprintln(&b, "ENV PKGX_GLIBC="+strings.TrimPrefix(glibc, "="))
+		fmt.Fprintln(&b, "ENV ZPKG_GLIBC="+strings.TrimPrefix(glibc, "="))
 	}
 	fmt.Fprintln(&b, "COPY pkgm /pkgm")
 	fmt.Fprintln(&b, "RUN "+execForm("/pkgm", "install", "-s", project))
