@@ -15,7 +15,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/go-pkgx/bottle"
+	"github.com/go-zpkg/bottle"
 )
 
 // lockClosure reads a lockfile and returns EXACTLY what it pins, with no

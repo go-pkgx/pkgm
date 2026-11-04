@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-pkgx/bottle"
+	"github.com/go-zpkg/bottle"
 )
 
 // --- CLI-level fake pkgx server ---------------------------------------------
@@ -68,7 +68,7 @@ func fakeServer(t *testing.T, pkgs map[string]fakePkg) func() {
 	// The fixture is a static-HTTP dist serving UNSIGNED bottles: the fail-closed
 	// check (which the install path now enforces too) would refuse every one of
 	// them, so this fixture states the posture it always assumed.
-	t.Setenv("PKGX_VERIFY", "0")
+	t.Setenv("ZPKG_VERIFY", "0")
 	bottle.DistBase, bottle.PantryBase = srv.URL, srv.URL
 	return srv.Close
 }
@@ -210,7 +210,7 @@ func TestCommandsE2E(t *testing.T) {
 	home := t.TempDir()
 	dir := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("PKGX_DIR", dir)
+	t.Setenv("ZPKG_DIR", dir)
 	t.Setenv("PATH", filepath.Join(home, ".local", "bin")) // silence warnPath
 	// Name the prefix rather than inheriting resolvePrefix's default. That
 	// default is euid-dependent — root installs to /usr/local, which is a
@@ -295,7 +295,7 @@ func TestRunExec(t *testing.T) {
 		},
 	})()
 	dir := t.TempDir()
-	t.Setenv("PKGX_DIR", dir)
+	t.Setenv("ZPKG_DIR", dir)
 	var gotArgv []string
 	old := bottle.Exec
 	bottle.Exec = func(argv0 string, argv []string, env []string) error {
@@ -460,7 +460,7 @@ func TestOutdatedDoesNotCallAFailedLookupAnAllClear(t *testing.T) {
 	// unreachable pantry looks like from inside PickVersion.
 	defer fakeServer(t, map[string]fakePkg{})()
 	dir := t.TempDir()
-	t.Setenv("PKGX_DIR", dir)
+	t.Setenv("ZPKG_DIR", dir)
 	if err := os.MkdirAll(filepath.Join(dir, "acme.org", "ghost", "v1.0.0"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -484,10 +484,10 @@ func TestOutdatedDoesNotCallAFailedLookupAnAllClear(t *testing.T) {
 }
 
 // AN EMPTY STORE SAYS SO AND QUESTIONS ITSELF. Printing nothing is read as
-// "all current"; it is more often the wrong PKGX_DIR.
+// "all current"; it is more often the wrong ZPKG_DIR.
 func TestOutdatedOfAnEmptyStoreSaysSo(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PKGX_DIR", dir)
+	t.Setenv("ZPKG_DIR", dir)
 	var out strings.Builder
 	if err := cmdOutdated(&out, ""); err != nil {
 		t.Fatalf("an empty store was an error: %v", err)
@@ -575,7 +575,7 @@ func TestUninstallWorksWithNoNetworkAtAll(t *testing.T) {
 	oldDist, oldPantry := bottle.DistBase, bottle.PantryBase
 	bottle.DistBase, bottle.PantryBase = "http://127.0.0.1:1", "http://127.0.0.1:1"
 	defer func() { bottle.DistBase, bottle.PantryBase = oldDist, oldPantry }()
-	t.Setenv("PKGX_DIR", store)
+	t.Setenv("ZPKG_DIR", store)
 
 	stub := stubFor(t, filepath.Join(prefix, "bin"), store, "acme.org/tool", "1.0.0", "tool")
 	if err := os.MkdirAll(filepath.Join(store, "acme.org/tool", "v1.0.0", "bin"), 0o755); err != nil {
@@ -597,7 +597,7 @@ func TestUninstallWorksWithNoNetworkAtAll(t *testing.T) {
 // command reported both success and "that was never installed".
 func TestUninstallSaysWhatItDid(t *testing.T) {
 	store, prefix := t.TempDir(), t.TempDir()
-	t.Setenv("PKGX_DIR", store)
+	t.Setenv("ZPKG_DIR", store)
 	out := captureStdout(t, func() {
 		if err := cmdUninstall([]string{"acme.org/ghost"}, prefix); err != nil {
 			t.Fatal(err)
@@ -665,7 +665,7 @@ func TestUninstallLeavesTheClosureSiblingsAlone(t *testing.T) {
 	})()
 	home, store := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("PKGX_DIR", store)
+	t.Setenv("ZPKG_DIR", store)
 	prefix := filepath.Join(home, ".local")
 	t.Setenv("PKGM_PREFIX", prefix)
 	t.Setenv("PATH", filepath.Join(prefix, "bin"))

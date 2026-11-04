@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/go-pkgx/bottle"
+	"github.com/go-zpkg/bottle"
 )
 
 // cmdRun installs a package's closure (plus glibc on linux) and execs its

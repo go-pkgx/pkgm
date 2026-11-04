@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-pkgx/bottle"
+	"github.com/go-zpkg/bottle"
 )
 
 // resolved builds the one-package closure these tests shim.
@@ -16,13 +16,13 @@ func resolved(t *testing.T, project, version string) []bottle.Resolved {
 	return []bottle.Resolved{{Project: project, Version: bottle.ParseVer(version)}}
 }
 
-// ⛔ TestRootStoreDoesNotFollowTheCallersHome is go-pkgx/pkgm#73's first half.
+// ⛔ TestRootStoreDoesNotFollowTheCallersHome is go-zpkg/pkgm#73's first half.
 // macOS `sudo` keeps the caller's HOME, so ~/.pkgx resolved to an
 // unprivileged user's home and root's shim pointed into it.
 func TestRootStoreDoesNotFollowTheCallersHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("PKGX_DIR", "")
+	t.Setenv("ZPKG_DIR", "")
 
 	if got, want := storeFor("/usr/local"), "/usr/local/pkgs"; got != want {
 		t.Errorf("storeFor(/usr/local) = %q, want %q — this is the escalation in #73", got, want)
@@ -38,7 +38,7 @@ func TestRootStoreDoesNotFollowTheCallersHome(t *testing.T) {
 func TestAHomePrefixKeepsTheHomeStore(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("PKGX_DIR", "")
+	t.Setenv("ZPKG_DIR", "")
 
 	want := filepath.Join(home, ".pkgx")
 	if got := storeFor(filepath.Join(home, ".local")); got != want {
@@ -51,10 +51,10 @@ func TestAHomePrefixKeepsTheHomeStore(t *testing.T) {
 // the documented workaround for the very bug it fixes.
 func TestPKGXDIRStillWins(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	t.Setenv("PKGX_DIR", "/opt/pkgx")
+	t.Setenv("ZPKG_DIR", "/opt/pkgx")
 
 	if got := storeFor("/usr/local"); got != "/opt/pkgx" {
-		t.Errorf("storeFor with PKGX_DIR set = %q, want /opt/pkgx", got)
+		t.Errorf("storeFor with ZPKG_DIR set = %q, want /opt/pkgx", got)
 	}
 }
 
@@ -92,7 +92,7 @@ func TestAForeignOwnedStoreIsRefused(t *testing.T) {
 	if err == nil {
 		t.Fatal("a root prefix accepted a store owned by uid 501 — this is exactly #73")
 	}
-	for _, want := range []string{"501", "PKGX_DIR"} {
+	for _, want := range []string{"501", "ZPKG_DIR"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal does not mention %q: %v", want, err)
 		}

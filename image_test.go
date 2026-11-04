@@ -14,7 +14,7 @@ func TestWriteImage(t *testing.T) {
 	got := b.String()
 	for _, want := range []string{
 		"FROM scratch\n",
-		"ENV PKGX_DIR=/pkgx\n",
+		"ENV ZPKG_DIR=/pkgx\n",
 		"ENV HOME=/root\n",
 		"COPY pkgm /pkgm\n",
 		`RUN ["/pkgm","install","-s","lz4.org"]` + "\n",
@@ -24,29 +24,29 @@ func TestWriteImage(t *testing.T) {
 			t.Errorf("Containerfile missing %q\n---\n%s", want, got)
 		}
 	}
-	// without -overlay, no PKGX_PANTRY_OVERLAY line
-	if strings.Contains(got, "PKGX_PANTRY_OVERLAY") {
+	// without -overlay, no ZPKG_PANTRY_OVERLAY line
+	if strings.Contains(got, "ZPKG_PANTRY_OVERLAY") {
 		t.Errorf("unexpected overlay env:\n%s", got)
 	}
 }
 
-// -overlay bakes an ENV PKGX_PANTRY_OVERLAY line before COPY.
+// -overlay bakes an ENV ZPKG_PANTRY_OVERLAY line before COPY.
 func TestWriteImageOverlay(t *testing.T) {
 	var b strings.Builder
-	url := "https://raw.githubusercontent.com/go-pkgx/pantry-overlay/main/projects"
+	url := "https://raw.githubusercontent.com/go-zpkg/pantry-overlay/main/projects"
 	if err := writeImage(&b, []string{"curl.se"}, url, ""); err != nil {
 		t.Fatalf("writeImage: %v", err)
 	}
 	got := b.String()
-	if !strings.Contains(got, "ENV PKGX_PANTRY_OVERLAY="+url+"\n") {
+	if !strings.Contains(got, "ENV ZPKG_PANTRY_OVERLAY="+url+"\n") {
 		t.Errorf("overlay env missing:\n%s", got)
 	}
-	if strings.Index(got, "PKGX_PANTRY_OVERLAY") > strings.Index(got, "COPY pkgm") {
+	if strings.Index(got, "ZPKG_PANTRY_OVERLAY") > strings.Index(got, "COPY pkgm") {
 		t.Errorf("overlay env must precede COPY:\n%s", got)
 	}
 }
 
-// -glibc bakes the pin as PKGX_GLIBC, so it holds for the install RUN AND for
+// -glibc bakes the pin as ZPKG_GLIBC, so it holds for the install RUN AND for
 // every later `pkgm run` in the image; a leading "=" is not doubled.
 func TestWriteImageGlibcPin(t *testing.T) {
 	for _, in := range []string{"2.28", "=2.28"} {
@@ -55,10 +55,10 @@ func TestWriteImageGlibcPin(t *testing.T) {
 			t.Fatalf("writeImage glibc=%q: %v", in, err)
 		}
 		got := b.String()
-		if !strings.Contains(got, "ENV PKGX_GLIBC=2.28\n") {
+		if !strings.Contains(got, "ENV ZPKG_GLIBC=2.28\n") {
 			t.Errorf("glibc=%q: pin env missing:\n%s", in, got)
 		}
-		if strings.Index(got, "PKGX_GLIBC") > strings.Index(got, "COPY pkgm") {
+		if strings.Index(got, "ZPKG_GLIBC") > strings.Index(got, "COPY pkgm") {
 			t.Errorf("pin env must precede COPY (it governs the RUN):\n%s", got)
 		}
 	}
@@ -67,7 +67,7 @@ func TestWriteImageGlibcPin(t *testing.T) {
 	if err := writeImage(&b, []string{"lz4.org"}, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(b.String(), "PKGX_GLIBC") {
+	if strings.Contains(b.String(), "ZPKG_GLIBC") {
 		t.Errorf("unpinned image carries a glibc pin:\n%s", b.String())
 	}
 }

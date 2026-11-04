@@ -26,8 +26,8 @@ jobs:
       #
       #     error: pathspec 'v0.3.10' did not match any file(s) known to git
       #
-      # Measured 2026-10-09 on go-pkgx/mirror, immediately after adding that
-      # checkout: `git checkout "$tag"` was taken from go-pkgx/bk without the
+      # Measured 2026-10-09 on go-zpkg/mirror, immediately after adding that
+      # checkout: `git checkout "$tag"` was taken from go-zpkg/bk without the
       # `fetch-depth: 0` beside it. Half of a pair.
       - uses: actions/checkout@v7
         with:
@@ -50,7 +50,7 @@ jobs:
             # ⛔ A DISPATCH CHECKS OUT THE DEFAULT BRANCH, NOT THE TAG.
             # Without this line the run builds whatever main holds and
             # uploads it under the tag's name. Measured 2026-10-09 on
-            # go-pkgx/mirror: a re-run of v0.3.10 replaced its assets with
+            # go-zpkg/mirror: a re-run of v0.3.10 replaced its assets with
             # binaries stamped `v0.0.0-20261009064454-6f82d049bd0e` — a
             # pseudo-version, which is Go saying "this commit is not a tag".
             git checkout "$tag"
@@ -61,9 +61,9 @@ jobs:
 
       # Cross-compile the pure-Go CGO_ENABLED=0 binary for every
       # {linux,darwin,windows} x {amd64,arm64} target, name the assets
-      # pkgm-<os>-<arch> (windows: .exe), and record a SHA256SUMS manifest.
+      # zpkgm-<os>-<arch> (windows: .exe), and record a SHA256SUMS manifest.
       # The release version (tag without the leading "v") is injected into
-      # main.version via -ldflags so `pkgm --version` matches the tag.
+      # main.version via -ldflags so `zpkgm --version` matches the tag.
       # ⛔ dist/ MUST NOT LIVE IN THE CHECKOUT. Go stamps the main module
       # from the work tree's VCS state, so the moment the first binary lands
       # in an untracked dist/ the tree is dirty and every LATER build in this
@@ -93,7 +93,7 @@ jobs:
             windows/amd64 windows/arm64; do
             os=${target%/*}
             arch=${target#*/}
-            out="pkgm-${os}-${arch}"
+            out="zpkgm-${os}-${arch}"
             if [ "$os" = "windows" ]; then
               out="${out}.exe"
             fi
@@ -102,7 +102,7 @@ jobs:
               go build -trimpath -ldflags="-s -w -X main.version=${TAG#v}" -o "$DIST/${out}" .
           done
           cd "$DIST"
-          sha256sum pkgm-* > SHA256SUMS
+          sha256sum zpkgm-* > SHA256SUMS
           cat SHA256SUMS
 
       # EVERY binary, not one, and EQUALITY, not "contains the tag".
@@ -116,7 +116,7 @@ jobs:
           DIST="$RUNNER_TEMP/dist"
           want="${TAG#v}"
           bad=0
-          for bin in "$DIST"/pkgm-*; do
+          for bin in "$DIST"/zpkgm-*; do
             name=$(basename "$bin")
             info=$(go version -m "$bin")
             mod=$(printf '%s\n' "$info" | awk '$1=="mod" {print $3; exit}')
@@ -144,9 +144,9 @@ jobs:
           done
           # And the version it PRINTS: the ldflags stamp is what users see,
           # and it is set independently of the build info above.
-          got=$("$DIST/pkgm-linux-amd64" --version | awk '{print $2}')
+          got=$("$DIST/zpkgm-linux-amd64" --version | awk '{print $2}')
           if [ "$got" != "$want" ]; then
-            echo "::error::pkgm --version says '$got', want exactly '$want'"
+            echo "::error::zpkgm --version says '$got', want exactly '$want'"
             bad=1
           fi
           exit "$bad"
@@ -157,12 +157,12 @@ jobs:
       # would replace the manifest. A provenance attestation is the half
       # that cannot be forged from the release page — GitHub signs, through
       # Sigstore, a statement that THIS workflow built THAT file from THAT
-      # commit, and `gh attestation verify -R go-pkgx/pkgm <file>` checks it.
+      # commit, and `gh attestation verify -R go-zpkg/zpkgm <file>` checks it.
       #
-      # Measured 2026-10-20 on go-pkgx/pkgx v0.23.1, with go-fleettools'
+      # Measured 2026-10-20 on go-zpkg/pkgx v0.23.1, with go-fleettools'
       # relverify: twelve files, every checksum right, and every attestation
       # lookup `HTTP 404: Not Found`. The same was true here, and of
-      # go-pkgx/bk and go-pkgx/mirror — one organisation publishing binaries
+      # go-zpkg/bk and go-zpkg/mirror — one organisation publishing binaries
       # that verify as far as a manifest can take them and no further.
       #
       # It runs AFTER the stamp guard and BEFORE publishing: nothing
@@ -172,7 +172,7 @@ jobs:
         uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
-            ${{ runner.temp }}/dist/pkgm-*
+            ${{ runner.temp }}/dist/zpkgm-*
             ${{ runner.temp }}/dist/SHA256SUMS
 
       - name: Publish GitHub Release
@@ -187,5 +187,5 @@ jobs:
           else
             gh release create "$TAG" "$DIST"/* \
               --title "$TAG" \
-              --notes "Static, dependency-free pkgm binaries (CGO_ENABLED=0) for linux, darwin and windows on amd64 and arm64. Verify downloads against SHA256SUMS. Install THIS release with: curl -fsSL https://go-pkgx.github.io/install.sh | sh -s -- pkgm $TAG"
+              --notes "Static, dependency-free zpkgm binaries (CGO_ENABLED=0) for linux, darwin and windows on amd64 and arm64. Verify downloads against SHA256SUMS. Install THIS release with: curl -fsSL https://go-zpkg.github.io/install.sh | sh -s -- zpkgm $TAG"
           fi

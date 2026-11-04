@@ -23,8 +23,8 @@ jobs:
   #
   # ⛔ AND THE `go` DIRECTIVE IS THE TOOLCHAIN. The lane always pinned
   # go-version 1.27.2, so what CI built was never vulnerable -- but `go
-  # install github.com/go-pkgx/pkgm@main`, which is how every factory
-  # workflow in go-pkgx/packages gets this binary, builds with the RUNNER's
+  # install github.com/go-zpkg/zpkgm@main`, which is how every factory
+  # workflow in go-zpkg/packages gets this binary, builds with the RUNNER's
   # toolchain. Raising the directive alone took this module from 22 findings
   # to 1, a notice with no released fix.
   vuln:

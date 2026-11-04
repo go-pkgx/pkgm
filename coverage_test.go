@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/go-pkgx/bottle"
+	"github.com/go-zpkg/bottle"
 )
 
 func TestRunConfigWarning(t *testing.T) {
@@ -41,7 +41,7 @@ func TestRunEntry(t *testing.T) {
 		t.Errorf("bad-cmd code=%d", code)
 	}
 	dir := t.TempDir()
-	t.Setenv("PKGX_DIR", dir)
+	t.Setenv("ZPKG_DIR", dir)
 	if code := run([]string{"ls"}); code != 0 {
 		t.Errorf("ls code=%d", code)
 	}
@@ -49,7 +49,7 @@ func TestRunEntry(t *testing.T) {
 
 func TestDispatchAliases(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PKGX_DIR", dir)
+	t.Setenv("ZPKG_DIR", dir)
 	// commands that only read the (empty) store must not error
 	for _, c := range []string{"list", "ls", "outdated", "up", "update", "upgrade"} {
 		if err := dispatch(c, nil, flags{}); err != nil {

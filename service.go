@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-pkgx/bottle"
+	"github.com/go-zpkg/bottle"
 )
 
 // `pkgm service`: run a package's program as a supervised, versioned service.
@@ -438,7 +438,7 @@ func checkStore(store string) error {
 	for _, r := range protectedStoreRoots {
 		if store == r || strings.HasPrefix(store, r+"/") {
 			return fmt.Errorf("the store %s is under %s, which the service's sandbox hides (ProtectHome=, PrivateTmp=): "+
-				"set PKGX_DIR to a directory outside /home, /root, /run/user and /tmp, e.g. /opt/pkgx", store, r)
+				"set ZPKG_DIR to a directory outside /home, /root, /run/user and /tmp, e.g. /opt/pkgx", store, r)
 		}
 	}
 	return nil
@@ -507,7 +507,7 @@ func serviceConstraint(arg string) (project, constraint string) {
 
 // ensureInstalled resolves and installs the closure, returning the version and
 // the closure itself — the caller needs it to judge who owns the paths the
-// unit is about to record (see trustStore, and go-pkgx/pkgm#73).
+// unit is about to record (see trustStore, and go-zpkg/pkgm#73).
 func ensureInstalled(project, constraint, store string) (string, []bottle.Resolved, error) {
 	closure, err := bottle.ResolveClosure(map[string]string{project: constraint})
 	if err != nil {
@@ -548,7 +548,7 @@ func prepare(project, constraint, store string) (*bottle.Service, string, error)
 	}
 	// ⛔ BEFORE A ROOT UNIT RECORDS THESE PATHS. The unit's ExecStart is
 	// <store>/<project>/v%i/bin/<command>, run by root at every boot, so a
-	// store anyone else can write is go-pkgx/pkgm#73 with a worse blast
+	// store anyone else can write is go-zpkg/pkgm#73 with a worse blast
 	// radius than the shim it was reported against. checkStore above refuses
 	// a store under /home, /root, /run/user or /tmp because the sandbox hides
 	// those — a different question from who OWNS it, and /opt/pkgx owned by

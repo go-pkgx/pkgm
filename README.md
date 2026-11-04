@@ -1,10 +1,10 @@
 # pkgm
 
-[![CI](https://github.com/go-pkgx/pkgm/actions/workflows/ci.yml/badge.svg)](https://github.com/go-pkgx/pkgm/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/go-pkgx/pkgm.svg)](https://pkg.go.dev/github.com/go-pkgx/pkgm)
+[![CI](https://github.com/go-zpkg/zpkgm/actions/workflows/ci.yml/badge.svg)](https://github.com/go-zpkg/zpkgm/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-zpkg/zpkgm.svg)](https://pkg.go.dev/github.com/go-zpkg/zpkgm)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
 
-[Home](https://go-pkgx.github.io/) · [Docs](https://go-pkgx.github.io/docs/)
+[Home](https://go-zpkg.github.io/) · [Docs](https://go-zpkg.github.io/docs/)
 
 A **dependency-free, pure-Go** package manager for [pkgx](https://pkgx.sh)
 bottles — a single `CGO_ENABLED=0` binary that runs on a `FROM scratch` image
@@ -15,7 +15,7 @@ The reference `pkgm` is a Deno/TypeScript script that shells out to
 runtime closure just to install a package. `pkgm` replaces all of it with one
 static ~9 MB binary:
 
-| | reference pkgm | go-pkgx/pkgm |
+| | reference pkgm | go-zpkg/pkgm |
 | --- | --- | --- |
 | downloader | curl + openssl + nghttp2 | Go `net/http` (TLS built in, CA bundle embedded) |
 | extractor | info-zip + xz | Go `compress/gzip` + `ulikunitz/xz` |
@@ -28,20 +28,20 @@ static ~9 MB binary:
 **Linux / macOS** — one line, naming the release you want:
 
 ```sh
-curl -fsSL https://go-pkgx.github.io/install.sh | sh -s -- pkgm v0.1.4
+curl -fsSL https://go-zpkg.github.io/install.sh | sh -s -- pkgm v0.1.4
 ```
 
 **Windows** (PowerShell) — `irm | iex` passes no arguments, so the version goes
 in the environment:
 
 ```powershell
-$env:PKGM_VERSION='v0.1.4'; irm https://go-pkgx.github.io/install.ps1 | iex
+$env:PKGM_VERSION='v0.1.4'; irm https://go-zpkg.github.io/install.ps1 | iex
 ```
 
 The installer downloads the static binary for your os/arch from that
-[release](https://github.com/go-pkgx/pkgm/releases), verifies it against the
+[release](https://github.com/go-zpkg/zpkgm/releases), verifies it against the
 release `SHA256SUMS`, and drops `pkgm` on your `PATH` (`$HOME/.local/bin`, or
-`%LOCALAPPDATA%\Programs\go-pkgx` on Windows). Set `PKGM_INSTALL` to override
+`%LOCALAPPDATA%\Programs\go-zpkg` on Windows). Set `PKGM_INSTALL` to override
 the directory on Unix.
 
 ⛔ **`SHA256SUMS` is a checksum of itself.** It says the binaries match a
@@ -51,7 +51,7 @@ GitHub's **provenance attestation** — signed through Sigstore, saying that
 this repository's release workflow built that file from that commit:
 
 ```sh
-gh attestation verify -R go-pkgx/pkgm pkgm-linux-amd64
+gh attestation verify -R go-zpkg/pkgm pkgm-linux-amd64
 ```
 
 Every file of a release published after 2026-10-20 carries one; earlier ones
@@ -69,7 +69,7 @@ the target version is already installed, and `PKGM_FORCE=1` reinstalls anyway.
 **Go users**:
 
 ```sh
-go install github.com/go-pkgx/pkgm@latest
+go install github.com/go-zpkg/zpkgm@latest
 ```
 
 Once installed, `pkgm install lz4.org` verifies each bottle against the signed
@@ -91,18 +91,18 @@ pkgm service      install|switch|rollback|list|remove   run a daemon under syste
 flags: -h/--help  -v/--version  -p/--pin  -P/--prefix DIR  -s/--from-scratch
        -f/--file FILE   read packages from a file, one <pkg>[@version] per line
        --lock FILE      install exactly what a `bk lock` file pins
-env:   PKGX_DIR     bottle store (default: ~/.pkgx, or <prefix>/pkgs when the
+env:   ZPKG_DIR     bottle store (default: ~/.pkgx, or <prefix>/pkgs when the
                     prefix is outside your home — see "A shim is a privilege
                     boundary")
-       PKGX_DIST    bottle source (default: oci://ghcr.io/go-pkgx/packages, signed)
-       PKGX_VERIFY  verify bottle signatures, fail-closed (default: on)
+       ZPKG_DIST    bottle source (default: oci://ghcr.io/go-zpkg/packages, signed)
+       ZPKG_VERIFY  verify bottle signatures, fail-closed (default: on)
        PKGM_PREFIX  default install prefix (ideal for FROM scratch)
 ```
 
 By default `pkgm install lz4.org` pulls from the signed OCI registry
-`oci://ghcr.io/go-pkgx/packages` and verifies each bottle's signature before
+`oci://ghcr.io/go-zpkg/packages` and verifies each bottle's signature before
 installing — no env needed. To use the full unsigned upstream pantry instead,
-set `PKGX_DIST=https://dist.pkgx.dev` together with `PKGX_VERIFY=0`.
+set `ZPKG_DIST=https://dist.pkgx.dev` together with `ZPKG_VERIFY=0`.
 
 The `install`/`uninstall`/`shim`/`list`/`outdated`/`update`/`pin` command
 surface and the `~/.local` vs `/usr/local` prefix logic mirror the reference
@@ -166,7 +166,7 @@ $ echo $?
 1
 ```
 
-An empty store says so and asks whether `PKGX_DIR` was right, rather than
+An empty store says so and asks whether `ZPKG_DIR` was right, rather than
 printing a silence that reads as a clean bill of health.
 
 ### `uninstall` asks the machine, not the pantry
@@ -212,7 +212,7 @@ pkgm service remove   <svc>             stop and disable every instance, delete 
 ```
 
 A recipe that ships a daemon says how to run it in a `service "<name>" { … }`
-block (see [bottle](https://github.com/go-pkgx/bottle#a-recipe-can-declare-a-service)).
+block (see [bottle](https://github.com/go-zpkg/bottle#a-recipe-can-declare-a-service)).
 pkgm **renders** the systemd unit from that data. No unit file comes in the
 bottle. The hardening every service shares is written once, here, and the
 recipe states only what differs between daemons.
@@ -251,8 +251,8 @@ port, and none of these can. Measured: `authn-bridge@0.20.0` started beside
 
 The store must be one that the service's sandbox can see. `ProtectHome=` and
 `PrivateTmp=` hide `/home`, `/root`, `/run/user` and `/tmp`, so a root
-install with the default `PKGX_DIR=/root/.pkgx` is refused, with a message
-that says why. Use `PKGX_DIR=/opt/pkgx`, for example. It must also be a store
+install with the default `ZPKG_DIR=/root/.pkgx` is refused, with a message
+that says why. Use `ZPKG_DIR=/opt/pkgx`, for example. It must also be a store
 nobody else can write — the unit's `ExecStart` is run by root at every boot,
 so the same ownership rule as a shim applies, and `/opt/pkgx` owned by an
 ordinary user passes the sandbox check and fails that one. The program must be
@@ -266,7 +266,7 @@ $ sudo pkgm install go.dev@1.27.3
 pkgm: refusing to record store paths under /usr/local/bin:
   /Users/you/.pkgx is owned by uid 501, and /usr/local/bin belongs to uid 0 —
   uid 501 could replace what gets run with root's privileges.
-  Use a store that uid 0 controls: PKGX_DIR=/usr/local/pkgs
+  Use a store that uid 0 controls: ZPKG_DIR=/usr/local/pkgs
 ```
 
 A shim is a small script in `<prefix>/bin` holding absolute paths: the binary
@@ -274,25 +274,25 @@ it `exec`s and the `LD_LIBRARY_PATH` it exports. It runs with the privileges
 of whoever invokes it, so anyone who can write one of those paths can run
 code as that person.
 
-`PKGX_DIR` defaults to `~/.pkgx`, and **macOS `sudo` keeps the caller's
+`ZPKG_DIR` defaults to `~/.pkgx`, and **macOS `sudo` keeps the caller's
 `HOME`** — so `sudo pkgm install go.dev` used to write a root-owned
 `/usr/local/bin/go` pointing into an unprivileged user's home directory, and
 anything root ran through `go` after that executed a user-writable binary.
-That was [#73](https://github.com/go-pkgx/pkgm/issues/73).
+That was [#73](https://github.com/go-zpkg/zpkgm/issues/73).
 
 Two things changed, because either alone leaves a hole:
 
-- **The default follows the prefix.** With `PKGX_DIR` unset, the store is
+- **The default follows the prefix.** With `ZPKG_DIR` unset, the store is
   `<prefix>/pkgs` whenever the prefix is not inside the home directory of the
   user pkgm is running as. A plain `pkgm install` into `~/.local` goes on
-  using `~/.pkgx`, so nothing moves for the ordinary case, and `PKGX_DIR`
+  using `~/.pkgx`, so nothing moves for the ordinary case, and `ZPKG_DIR`
   still wins when you set it.
 - **The invariant is checked anyway.** `install`, `shim`, `update` and
   `service install` refuse when the store, any package prefix in it, any
   `LD_LIBRARY_PATH` directory, **or any directory above one of those** is
   owned by someone other than root or the prefix's owner, or is writable by
   group or others. A default is not a boundary: `PKGM_PREFIX`, `--prefix` and
-  `PKGX_DIR` combine into configurations nobody enumerated.
+  `ZPKG_DIR` combine into configurations nobody enumerated.
 
 Root is always allowed, because root can replace the shim itself. The
 prefix's own owner is allowed too, because on a stock macOS with Homebrew
@@ -343,18 +343,18 @@ beside what is there. A test pins that, because the refusal guards
 
 ### `~/.pkgx/config.hcl2`
 
-Rather than exporting the `PKGX_*` (and OCI auth) variables every time, set
+Rather than exporting the `ZPKG_*` (and OCI auth) variables every time, set
 their defaults declaratively in `~/.pkgx/config.hcl2`. It is a small
 [HCL2](https://github.com/hashicorp/hcl) file of top-level attributes; a real
 environment variable always overrides a value set here:
 
 ```hcl2
-# ~/.pkgx/config.hcl2 — defaults for the go-pkgx tools.
+# ~/.pkgx/config.hcl2 — defaults for the go-zpkg tools.
 # A real environment variable always overrides a value set here.
-PKGX_DIST   = "oci://ghcr.io/go-pkgx/packages"  # signed registry (default)
-PKGX_VERIFY = true                               # fail-closed signature check
-# PKGX_DIR    = "/opt/pkgx"
-# PKGX_PANTRY = "https://raw.githubusercontent.com/pkgxdev/pantry/main/projects"
+ZPKG_DIST   = "oci://ghcr.io/go-zpkg/packages"  # signed registry (default)
+ZPKG_VERIFY = true                               # fail-closed signature check
+# ZPKG_DIR    = "/opt/pkgx"
+# ZPKG_PANTRY = "https://raw.githubusercontent.com/pkgxdev/pantry/main/projects"
 # OCI_TOKEN   = "..."                            # private-registry credentials
 ```
 
@@ -374,7 +374,7 @@ on an image with no system libc. Packages that ship a `#!/bin/sh` wrapper
 ```dockerfile
 FROM scratch
 COPY pkgm /pkgm
-ENV PKGX_DIR=/pkgx
+ENV ZPKG_DIR=/pkgx
 ENTRYPOINT ["/pkgm"]
 ```
 
@@ -417,7 +417,7 @@ Dockerfile:
 ```dockerfile
 FROM scratch
 COPY pkgm /pkgm
-ENV PKGX_DIR=/pkgx
+ENV ZPKG_DIR=/pkgx
 ENV PKGM_PREFIX=/usr     # bins land in /usr/bin; no sudo, no HOME needed
 ENTRYPOINT ["/pkgm"]
 ```
@@ -470,10 +470,10 @@ need in order to go and look.
    runtime `dependencies:` graph breadth-first; pick the highest
    `versions.txt` entry satisfying each constraint (`*`, `^`, `~`, `>=`, `=`).
 2. **download** — fetch `<project>/<os>/<arch>/v<ver>.tar.{gz,xz}` from the bottle
-   source (default: the signed OCI registry `oci://ghcr.io/go-pkgx/packages`,
-   verifying each bottle's signature; `PKGX_DIST=https://dist.pkgx.dev` +
-   `PKGX_VERIFY=0` for the unsigned upstream).
-3. **extract** — stream straight through gzip/xz + tar into `PKGX_DIR`.
+   source (default: the signed OCI registry `oci://ghcr.io/go-zpkg/packages`,
+   verifying each bottle's signature; `ZPKG_DIST=https://dist.pkgx.dev` +
+   `ZPKG_VERIFY=0` for the unsigned upstream).
+3. **extract** — stream straight through gzip/xz + tar into `ZPKG_DIR`.
 4. **link** — write env-setting stubs (or run through the loader) so the tools
    find their sibling bottles' libraries.
 
@@ -505,4 +505,4 @@ maintainers to publish complete runtime closures.
 
 ## License
 
-BSD-3-Clause © the go-pkgx/pkgm authors.
+BSD-3-Clause © the go-zpkg/pkgm authors.
